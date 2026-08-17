@@ -454,6 +454,38 @@ Expected:
 }
 ```
 
+## Daraja Callback IP Whitelist
+
+Based on the Daraja note you shared, Safaricom callback traffic may come from these IP addresses:
+
+- `196.201.214.200`
+- `196.201.214.206`
+- `196.201.213.114`
+- `196.201.214.207`
+- `196.201.214.208`
+- `196.201.213.44`
+- `196.201.212.127`
+- `196.201.212.138`
+- `196.201.212.129`
+- `196.201.212.136`
+- `196.201.212.74`
+- `196.201.212.69`
+
+If your server, firewall, reverse proxy, WAF, or cloud platform restricts inbound traffic, allow these IPs to reach your callback routes.
+
+Typical places to whitelist them:
+
+- Railway or platform edge rules
+- Nginx or Apache reverse proxy rules
+- Cloud firewall rules
+- VPS firewall rules such as `ufw` or provider security groups
+
+Important:
+
+- Use this list as a Daraja callback allowlist reference from the note you found.
+- If Safaricom changes the callback source IPs later, your firewall rules will need to be updated too.
+- Do not block your own local testing traffic while developing on `localhost`.
+
 ## Practical Testing Order
 
 Use this order to avoid confusion:
