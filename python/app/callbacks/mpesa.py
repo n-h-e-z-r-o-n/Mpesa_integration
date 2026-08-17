@@ -1,4 +1,7 @@
 import logging
+import json
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -6,6 +9,23 @@ from fastapi import APIRouter, Request
 
 logger = logging.getLogger("app.callbacks.mpesa")
 router = APIRouter(tags=["mpesa-callbacks"])
+CALLBACK_DATA_DIR = Path(__file__).resolve().parents[2] / "callback_data"
+
+
+def save_callback_payload(callback_name: str, payload: dict[str, Any]) -> None:
+    CALLBACK_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    enriched_payload = {
+        "callback_name": callback_name,
+        "received_at_utc": datetime.now(timezone.utc).isoformat(),
+        "payload": payload,
+    }
+
+    latest_file = CALLBACK_DATA_DIR / f"{callback_name}_latest.json"
+    latest_file.write_text(
+        json.dumps(enriched_payload, indent=2),
+        encoding="utf-8",
+    )
 
 
 async def log_callback(request: Request, callback_name: str) -> dict[str, Any]:
@@ -13,6 +33,8 @@ async def log_callback(request: Request, callback_name: str) -> dict[str, Any]:
         payload = await request.json()
     except Exception:
         payload = {"raw_body": (await request.body()).decode("utf-8", errors="ignore")}
+
+    save_callback_payload(callback_name, payload)
     logger.info("Received %s callback: %s", callback_name, payload)
     return payload
 
