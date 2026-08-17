@@ -49,7 +49,7 @@ def initiate_stk_push(
     else:
         party_b = str(settings.MPESA_SHORTCODE).strip()
 
-    payload = {
+    payload7 = {
         "BusinessShortCode": str(settings.MPESA_SHORTCODE).strip(),
         "Password": build_stk_password(timestamp),
         "Timestamp": timestamp,
@@ -62,5 +62,21 @@ def initiate_stk_push(
         "AccountReference": sanitized_ref,
         "TransactionDesc": sanitized_desc,
     }
+
+    payload = {
+        "BusinessShortCode": str(settings.MPESA_SHORTCODE).strip(),
+        "Password": build_stk_password(timestamp),
+        "Timestamp": timestamp,
+        "TransactionType": "CustomerBuyGoodsOnline",
+        "Amount": int(amount),
+        "PartyA": normalized_phone,
+        "PartyB": party_b,
+        "PhoneNumber": normalized_phone,
+        "CallBackURL": settings.stk_callback_url.strip(),
+        "AccountReference": sanitized_ref,
+        "TransactionDesc": sanitized_desc,
+    }
+
+    print(payload)
 
     return send_post_request("/mpesa/stkpush/v1/processrequest", payload)
