@@ -1,0 +1,14 @@
+{
+  "callback_name": "stk",
+  "received_at_utc": "2026-08-17T13:57:20.957988+00:00",
+  "payload": {
+    "Body": {
+      "stkCallback": {
+        "MerchantRequestID": "d0f2-4ec0-9bb2-52cf1bf611c3117165",
+        "CheckoutRequestID": "ws_CO_17082026165719883714415034",
+        "ResultCode": 2029,
+        "ResultDesc": "Failed due to an unresolved reason type."
+      }
+    }
+  }
+}

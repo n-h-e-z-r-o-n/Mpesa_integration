@@ -1,3 +1,4 @@
+import re
 from typing import Any
 
 from app.config import settings
@@ -9,6 +10,12 @@ from app.providers.mpesa.common import (
 )
 
 
+def _sanitize_str(text: str, max_length: int) -> str:
+    """Removes non-alphanumeric characters and enforces length limits."""
+    cleaned = re.sub(r"[^a-zA-Z0-9]", "", text)
+    return cleaned[:max_length]
+
+
 def initiate_stk_push(
     *,
     phone_number: str,
@@ -16,30 +23,44 @@ def initiate_stk_push(
     account_reference: str,
     transaction_desc: str,
     transaction_type: str = "CustomerPayBillOnline",
+    till_number: str | None = None,
 ) -> dict[str, Any]:
     if amount <= 0:
         raise ValueError("Amount must be greater than zero")
 
-    if not account_reference.strip():
-        raise ValueError("account_reference cannot be empty")
+    # Sanitize inputs to prevent M-Pesa schema rejection
+    sanitized_ref = _sanitize_str(account_reference, max_length=12)
+    sanitized_desc = _sanitize_str(transaction_desc, max_length=13)
 
-    if not transaction_desc.strip():
-        raise ValueError("transaction_desc cannot be empty")
+    if not sanitized_ref:
+        raise ValueError("account_reference must contain at least one alphanumeric character")
+
+    if not sanitized_desc:
+        raise ValueError("transaction_desc must contain at least one alphanumeric character")
 
     normalized_phone = normalize_phone(phone_number)
     timestamp = nairobi_timestamp()
+
+    # Determine PartyB based on payment type
+    if transaction_type == "CustomerBuyGoodsOnline":
+        if not till_number:
+            raise ValueError("till_number is required for CustomerBuyGoodsOnline")
+        party_b = str(till_number).strip()
+    else:
+        party_b = str(settings.MPESA_SHORTCODE).strip()
+
     payload = {
-        "BusinessShortCode": settings.MPESA_SHORTCODE,
+        "BusinessShortCode": str(settings.MPESA_SHORTCODE).strip(),
         "Password": build_stk_password(timestamp),
         "Timestamp": timestamp,
         "TransactionType": transaction_type,
-        "Amount": amount,
+        "Amount": int(amount),
         "PartyA": normalized_phone,
-        "PartyB": settings.MPESA_SHORTCODE,
+        "PartyB": party_b,
         "PhoneNumber": normalized_phone,
-        "CallBackURL": settings.stk_callback_url,
-        "AccountReference": account_reference.strip(),
-        "TransactionDesc": transaction_desc.strip(),
+        "CallBackURL": settings.stk_callback_url.strip(),
+        "AccountReference": sanitized_ref,
+        "TransactionDesc": sanitized_desc,
     }
 
     return send_post_request("/mpesa/stkpush/v1/processrequest", payload)
