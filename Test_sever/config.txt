@@ -1,0 +1,12 @@
+pktriot info
+pktriot configure
+pktriot info
+
+# add the HTTP rule:
+pktriot tunnel http add --domain something.pktriot.net --destination 127.0.0.1 --http 8000
+
+# confirm the rule:
+pktriot tunnel http ls
+
+# start the tunnel:
+pktriot start
