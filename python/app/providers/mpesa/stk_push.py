@@ -22,7 +22,7 @@ def initiate_stk_push(
     amount: int,
     account_reference: str,
     transaction_desc: str,
-    transaction_type: str = "CustomerPayBillOnline",
+    transaction_type: str = "CustomerBuyGoodsOnline",
     till_number: str | None = None,
 ) -> dict[str, Any]:
     if amount <= 0:
@@ -43,13 +43,11 @@ def initiate_stk_push(
 
     # Determine PartyB based on payment type
     if transaction_type == "CustomerBuyGoodsOnline":
-        if not till_number:
-            raise ValueError("till_number is required for CustomerBuyGoodsOnline")
-        party_b = str(till_number).strip()
-    else:
+        party_b = str(settings.MPESA_TILL_NO).strip()
+    else: #CustomerPayBillOnline
         party_b = str(settings.MPESA_SHORTCODE).strip()
 
-    payload7 = {
+    payload = {
         "BusinessShortCode": str(settings.MPESA_SHORTCODE).strip(),
         "Password": build_stk_password(timestamp),
         "Timestamp": timestamp,
@@ -63,19 +61,7 @@ def initiate_stk_push(
         "TransactionDesc": sanitized_desc,
     }
 
-    payload = {
-        "BusinessShortCode": str(settings.MPESA_SHORTCODE).strip(),
-        "Password": build_stk_password(timestamp),
-        "Timestamp": timestamp,
-        "TransactionType": "CustomerBuyGoodsOnline",
-        "Amount": int(amount),
-        "PartyA": normalized_phone,
-        "PartyB": party_b,
-        "PhoneNumber": normalized_phone,
-        "CallBackURL": settings.stk_callback_url.strip(),
-        "AccountReference": sanitized_ref,
-        "TransactionDesc": sanitized_desc,
-    }
+
 
     print(payload)
 

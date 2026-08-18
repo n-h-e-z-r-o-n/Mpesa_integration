@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     MPESA_CONSUMER_KEY: str
     MPESA_CONSUMER_SECRET: str
     MPESA_SHORTCODE: str
+    MPESA_TILL_NO:str
     MPESA_PASSKEY: str
     MPESA_INITIATOR_NAME: str | None = None
     MPESA_SECURITY_CREDENTIAL: str | None = None
