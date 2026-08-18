@@ -122,3 +122,9 @@ async def account_balance_result_callback(request: Request) -> dict[str, Any]:
 async def account_balance_timeout_callback(request: Request) -> dict[str, Any]:
     await log_callback(request, "account_balance_timeout")
     return accepted_response()
+
+
+@router.post("/callbacks/mpesa/ratiba")
+async def ratiba_callback(request: Request) -> dict[str, Any]:
+    await log_callback(request, "ratiba")
+    return accepted_response()

@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     MPESA_REVERSAL_TIMEOUT_URL: str | None = None
     MPESA_ACCOUNT_BALANCE_RESULT_URL: str | None = None
     MPESA_ACCOUNT_BALANCE_TIMEOUT_URL: str | None = None
+    MPESA_RATIBA_CALLBACK_URL: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -138,6 +139,13 @@ class Settings(BaseSettings):
         return self.MPESA_ACCOUNT_BALANCE_TIMEOUT_URL or self._build_url(
             self.PUBLIC_BASE_URL,
             "/callbacks/mpesa/account-balance/timeout",
+        )
+
+    @property
+    def ratiba_callback_url(self) -> str:
+        return self.MPESA_RATIBA_CALLBACK_URL or self._build_url(
+            self.PUBLIC_BASE_URL,
+            "/callbacks/mpesa/ratiba",
         )
 
 

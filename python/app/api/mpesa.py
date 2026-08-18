@@ -8,9 +8,11 @@ from app.providers.mpesa.account_balance import query_account_balance
 from app.providers.mpesa.auth import get_access_token
 from app.providers.mpesa.b2b import send_b2b_payment
 from app.providers.mpesa.b2c import send_b2c_payment
+from app.providers.mpesa.b2pochi_prod import send_b2pochi_payment
 from app.providers.mpesa.c2b_register import register_c2b_urls
 from app.providers.mpesa.c2b_simulate import simulate_c2b_payment
 from app.providers.mpesa.common import MpesaError
+from app.providers.mpesa.ratiba import create_ratiba_standing_order
 from app.providers.mpesa.reversal import reverse_transaction
 from app.providers.mpesa.stk_push import initiate_stk_push
 from app.providers.mpesa.stk_query import query_stk_push
@@ -77,6 +79,15 @@ class B2CRequest(BaseModel):
     originator_conversation_id: str | None = None
 
 
+class B2PochiProdRequest(BaseModel):
+    phone_number: str
+    amount: int = Field(gt=0)
+    remarks: str
+    command_id: str = "BusinessPayment"
+    occasion: str = ""
+    originator_conversation_id: str | None = None
+
+
 class B2BRequest(BaseModel):
     receiver_shortcode: str
     amount: int = Field(gt=0)
@@ -109,6 +120,10 @@ class AccountBalanceRequest(BaseModel):
     remarks: str = "Account balance query"
     identifier_type: str = "4"
     command_id: str = "AccountBalance"
+
+
+class RatibaRequest(BaseModel):
+    payload: dict[str, Any]
 
 
 @router.get("/token")
@@ -205,6 +220,26 @@ def mpesa_b2c(
         raise
 
 
+@router.post("/b2pochi-prod")
+def mpesa_b2pochi_prod(
+    payload: B2PochiProdRequest,
+    x_api_key: str = Header(...),
+) -> dict[str, Any]:
+    verify_internal_api_key(x_api_key)
+    try:
+        return send_b2pochi_payment(
+            phone_number=payload.phone_number,
+            amount=payload.amount,
+            remarks=payload.remarks,
+            command_id=payload.command_id,
+            occasion=payload.occasion,
+            originator_conversation_id=payload.originator_conversation_id,
+        )
+    except Exception as error:
+        handle_mpesa_error(error)
+        raise
+
+
 @router.post("/b2b")
 def mpesa_b2b(
     payload: B2BRequest,
@@ -278,6 +313,19 @@ def mpesa_account_balance(
             identifier_type=payload.identifier_type,
             command_id=payload.command_id,
         )
+    except Exception as error:
+        handle_mpesa_error(error)
+        raise
+
+
+@router.post("/ratiba")
+def mpesa_ratiba(
+    payload: RatibaRequest,
+    x_api_key: str = Header(...),
+) -> dict[str, Any]:
+    verify_internal_api_key(x_api_key)
+    try:
+        return create_ratiba_standing_order(payload.payload)
     except Exception as error:
         handle_mpesa_error(error)
         raise
