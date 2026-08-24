@@ -108,6 +108,11 @@ These are the exact URLs Safaricom uses for asynchronous responses. They must be
 `MPESA_C2B_VALIDATION_URL`
 - C2B validation callback.
 
+`MPESA_B2C_PATH`
+- B2C request path used after OAuth succeeds.
+- Default: `/mpesa/b2c/v3/paymentrequest`
+- If Daraja returns `Invalid Access Token - Invalid API call as no apiproduct match found`, your consumer key and secret may be subscribed to a different B2C product path such as `/mpesa/b2c/v1/paymentrequest`.
+
 `MPESA_B2C_RESULT_URL`
 - B2C success or processing result callback.
 
@@ -161,6 +166,7 @@ HTTP_READ_TIMEOUT=30
 MPESA_STK_CALLBACK_URL=https://your-domain.com/callbacks/mpesa/stk
 MPESA_C2B_CONFIRMATION_URL=https://your-domain.com/callbacks/mpesa/c2b/confirmation
 MPESA_C2B_VALIDATION_URL=https://your-domain.com/callbacks/mpesa/c2b/validation
+MPESA_B2C_PATH=/mpesa/b2c/v3/paymentrequest
 MPESA_B2C_RESULT_URL=https://your-domain.com/callbacks/mpesa/b2c/result
 MPESA_B2C_TIMEOUT_URL=https://your-domain.com/callbacks/mpesa/b2c/timeout
 MPESA_B2B_RESULT_URL=https://your-domain.com/callbacks/mpesa/b2b/result
@@ -321,6 +327,7 @@ This requires:
 - `MPESA_INITIATOR_NAME`
 - `MPESA_SECURITY_CREDENTIAL`
 - B2C enabled on your Daraja account
+- A Daraja app whose consumer key and secret are subscribed to the B2C product path in `MPESA_B2C_PATH`
 
 ```powershell
 Invoke-RestMethod `
@@ -506,6 +513,7 @@ Use this order to avoid confusion:
 - `MPESA_BASE_URL` is sandbox while you are using production credentials
 - `MPESA_PASSKEY` is wrong
 - `MPESA_SHORTCODE` is wrong for the product being tested
+- the OAuth app behind `MPESA_CONSUMER_KEY` and `MPESA_CONSUMER_SECRET` is not subscribed to the B2C API product path in `MPESA_B2C_PATH`
 - callback URLs are not public HTTPS URLs
 - initiator credentials are missing for B2C, B2B, reversal, status, or balance routes
 - Daraja product is not enabled on your account

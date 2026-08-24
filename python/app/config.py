@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     MPESA_STK_CALLBACK_URL: str | None = None
     MPESA_C2B_CONFIRMATION_URL: str | None = None
     MPESA_C2B_VALIDATION_URL: str | None = None
+    MPESA_B2C_PATH: str = "/mpesa/b2c/v3/paymentrequest"
     MPESA_B2C_RESULT_URL: str | None = None
     MPESA_B2C_TIMEOUT_URL: str | None = None
     MPESA_B2B_RESULT_URL: str | None = None

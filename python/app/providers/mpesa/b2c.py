@@ -40,4 +40,4 @@ def send_b2c_payment(
         "Occasion": occasion.strip(),
     }
 
-    return send_post_request("/mpesa/b2c/v3/paymentrequest", payload)
+    return send_post_request(settings.MPESA_B2C_PATH, payload)

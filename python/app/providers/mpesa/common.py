@@ -1,4 +1,5 @@
 import base64
+import logging
 import re
 from datetime import datetime
 from typing import Any
@@ -9,6 +10,9 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from app.config import settings
+
+
+logger = logging.getLogger(__name__)
 
 
 class MpesaError(Exception):
@@ -37,6 +41,56 @@ class MpesaIndeterminateError(MpesaError):
 
 
 _session: requests.Session | None = None
+
+
+def build_mpesa_error_message(
+    default_message: str,
+    *,
+    status_code: int | None = None,
+    response: dict[str, Any] | None = None,
+) -> str:
+    message_parts = [default_message]
+
+    if status_code is not None:
+        message_parts.append(f"(status {status_code})")
+
+    if response:
+        upstream_message = next(
+            (
+                response.get(key)
+                for key in (
+                    "errorMessage",
+                    "ResponseDescription",
+                    "responseDescription",
+                    "ResultDesc",
+                    "ResultDescription",
+                    "CustomerMessage",
+                )
+                if isinstance(response.get(key), str) and response.get(key).strip()
+            ),
+            None,
+        )
+        upstream_code = next(
+            (
+                response.get(key)
+                for key in (
+                    "errorCode",
+                    "ResponseCode",
+                    "responseCode",
+                    "ResultCode",
+                )
+                if response.get(key) not in (None, "")
+            ),
+            None,
+        )
+
+        if upstream_code is not None:
+            message_parts.append(f"code={upstream_code}")
+
+        if upstream_message:
+            message_parts.append(f"message={upstream_message}")
+
+    return " ".join(message_parts)
 
 
 def get_session() -> requests.Session:
@@ -151,8 +205,20 @@ def send_post_request(
         return send_post_request(path, payload, retry_on_401=False)
 
     if not response.ok:
-        raise MpesaRequestError(
+        logger.warning(
             "M-Pesa request failed",
+            extra={
+                "mpesa_path": path,
+                "mpesa_status_code": response.status_code,
+                "mpesa_response": data,
+            },
+        )
+        raise MpesaRequestError(
+            build_mpesa_error_message(
+                "M-Pesa request failed",
+                status_code=response.status_code,
+                response=data,
+            ),
             status_code=response.status_code,
             response=data,
         )

@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, status
@@ -20,6 +21,7 @@ from app.providers.mpesa.transaction_status import query_transaction_status
 
 
 router = APIRouter(prefix="/mpesa", tags=["mpesa"])
+logger = logging.getLogger(__name__)
 
 
 def verify_internal_api_key(x_api_key: str = Header(...)) -> None:
@@ -38,6 +40,24 @@ def handle_mpesa_error(error: Exception) -> None:
         ) from error
 
     if isinstance(error, MpesaError):
+        if hasattr(error, "response"):
+            logger.warning(
+                "M-Pesa upstream returned an error",
+                extra={
+                    "mpesa_status_code": getattr(error, "status_code", None),
+                    "mpesa_response": getattr(error, "response", None),
+                },
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={
+                    "message": str(error),
+                    "mpesa_status_code": getattr(error, "status_code", None),
+                    "mpesa_response": getattr(error, "response", None),
+                },
+            ) from error
+
+        logger.warning("M-Pesa request failed: %s", error)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=str(error),
