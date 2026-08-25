@@ -67,7 +67,7 @@ def handle_mpesa_error(error: Exception) -> None:
 
 
 class StkPushRequest(BaseModel):
-    phone_number: str
+    phone_number: str  = "254714415034"
     amount: int = Field(gt=0)
     account_reference: str
     transaction_desc: str
@@ -100,10 +100,10 @@ class B2CRequest(BaseModel):
 
 
 class B2PochiProdRequest(BaseModel):
-    phone_number: str
-    amount: int = Field(gt=0)
+    phone_number: str = "254714415034"
+    amount: int = 10
     remarks: str
-    command_id: str = "BusinessPayment"
+    command_id: str = "BusinessPayToPochi"
     occasion: str = ""
     originator_conversation_id: str | None = None
 

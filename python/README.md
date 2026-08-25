@@ -95,9 +95,63 @@ Edit this file before running the API:
 `HTTP_READ_TIMEOUT`
 - Timeout in seconds for waiting on the full Safaricom response.
 
+### Endpoint Path Fields
+
+These env values control the exact Safaricom OAuth and API paths used by this gateway. Keep them in `.env` so there is a single source of truth for outbound M-Pesa endpoints.
+
+`MPESA_AUTH_PATH`
+- OAuth token path.
+- Default: `/oauth/v1/generate?grant_type=client_credentials`
+
+`MPESA_STK_PUSH_PATH`
+- STK push request path.
+- Default: `/mpesa/stkpush/v1/processrequest`
+
+`MPESA_STK_QUERY_PATH`
+- STK query path.
+- Default: `/mpesa/stkpushquery/v1/query`
+
+`MPESA_C2B_REGISTER_PATH`
+- C2B URL registration path.
+- Default: `/mpesa/c2b/v2/registerurl`
+
+`MPESA_C2B_SIMULATE_PATH`
+- C2B simulation path.
+- Default: `/mpesa/c2b/v2/simulate`
+
+`MPESA_B2C_PATH`
+- B2C request path used after OAuth succeeds.
+- Default: `/mpesa/b2c/v3/paymentrequest`
+- If Daraja returns `Invalid Access Token - Invalid API call as no apiproduct match found`, your consumer key and secret may be subscribed to a different B2C product path such as `/mpesa/b2c/v1/paymentrequest`.
+
+`MPESA_B2POCHI_PATH`
+- B2Pochi production payout path.
+- Default: `/mpesa/b2c/v1/paymentrequest`
+
+`MPESA_B2B_PATH`
+- B2B payment path.
+- Default: `/mpesa/b2b/v1/paymentrequest`
+
+`MPESA_TRANSACTION_STATUS_PATH`
+- Transaction status query path.
+- Default: `/mpesa/transactionstatus/v1/query`
+
+`MPESA_REVERSAL_PATH`
+- Reversal request path.
+- Default: `/mpesa/reversal/v1/request`
+
+`MPESA_ACCOUNT_BALANCE_PATH`
+- Account balance query path.
+- Default: `/mpesa/accountbalance/v1/query`
+
+`MPESA_RATIBA_PATH`
+- Ratiba standing order path.
+- Default: `/standingorder/v1/createStandingOrderExternal`
+
 ### Callback URL Fields
 
 These are the exact URLs Safaricom uses for asynchronous responses. They must be publicly reachable if you are testing with the real Daraja platform.
+Avoid using the words `M-PESA`, `M-Pesa`, or `mpesa` anywhere in these callback URLs. Safaricom rejects those URLs during C2B registration.
 
 `MPESA_STK_CALLBACK_URL`
 - Callback for STK Push results.
@@ -107,11 +161,6 @@ These are the exact URLs Safaricom uses for asynchronous responses. They must be
 
 `MPESA_C2B_VALIDATION_URL`
 - C2B validation callback.
-
-`MPESA_B2C_PATH`
-- B2C request path used after OAuth succeeds.
-- Default: `/mpesa/b2c/v3/paymentrequest`
-- If Daraja returns `Invalid Access Token - Invalid API call as no apiproduct match found`, your consumer key and secret may be subscribed to a different B2C product path such as `/mpesa/b2c/v1/paymentrequest`.
 
 `MPESA_B2C_RESULT_URL`
 - B2C success or processing result callback.
@@ -163,20 +212,33 @@ MPESA_SECURITY_CREDENTIAL=your-security-credential
 HTTP_CONNECT_TIMEOUT=5
 HTTP_READ_TIMEOUT=30
 
-MPESA_STK_CALLBACK_URL=https://your-domain.com/callbacks/mpesa/stk
-MPESA_C2B_CONFIRMATION_URL=https://your-domain.com/callbacks/mpesa/c2b/confirmation
-MPESA_C2B_VALIDATION_URL=https://your-domain.com/callbacks/mpesa/c2b/validation
+MPESA_AUTH_PATH=/oauth/v1/generate?grant_type=client_credentials
+MPESA_STK_PUSH_PATH=/mpesa/stkpush/v1/processrequest
+MPESA_STK_QUERY_PATH=/mpesa/stkpushquery/v1/query
+MPESA_C2B_REGISTER_PATH=/mpesa/c2b/v2/registerurl
+MPESA_C2B_SIMULATE_PATH=/mpesa/c2b/v2/simulate
 MPESA_B2C_PATH=/mpesa/b2c/v3/paymentrequest
-MPESA_B2C_RESULT_URL=https://your-domain.com/callbacks/mpesa/b2c/result
-MPESA_B2C_TIMEOUT_URL=https://your-domain.com/callbacks/mpesa/b2c/timeout
-MPESA_B2B_RESULT_URL=https://your-domain.com/callbacks/mpesa/b2b/result
-MPESA_B2B_TIMEOUT_URL=https://your-domain.com/callbacks/mpesa/b2b/timeout
-MPESA_TRANSACTION_STATUS_RESULT_URL=https://your-domain.com/callbacks/mpesa/transaction-status/result
-MPESA_TRANSACTION_STATUS_TIMEOUT_URL=https://your-domain.com/callbacks/mpesa/transaction-status/timeout
-MPESA_REVERSAL_RESULT_URL=https://your-domain.com/callbacks/mpesa/reversal/result
-MPESA_REVERSAL_TIMEOUT_URL=https://your-domain.com/callbacks/mpesa/reversal/timeout
-MPESA_ACCOUNT_BALANCE_RESULT_URL=https://your-domain.com/callbacks/mpesa/account-balance/result
-MPESA_ACCOUNT_BALANCE_TIMEOUT_URL=https://your-domain.com/callbacks/mpesa/account-balance/timeout
+MPESA_B2POCHI_PATH=/mpesa/b2c/v1/paymentrequest
+MPESA_B2B_PATH=/mpesa/b2b/v1/paymentrequest
+MPESA_TRANSACTION_STATUS_PATH=/mpesa/transactionstatus/v1/query
+MPESA_REVERSAL_PATH=/mpesa/reversal/v1/request
+MPESA_ACCOUNT_BALANCE_PATH=/mpesa/accountbalance/v1/query
+MPESA_RATIBA_PATH=/standingorder/v1/createStandingOrderExternal
+
+MPESA_STK_CALLBACK_URL=https://your-domain.com/callbacks/payments/stk
+MPESA_C2B_CONFIRMATION_URL=https://your-domain.com/callbacks/payments/c2b/confirmation
+MPESA_C2B_VALIDATION_URL=https://your-domain.com/callbacks/payments/c2b/validation
+MPESA_B2C_RESULT_URL=https://your-domain.com/callbacks/payments/b2c/result
+MPESA_B2C_TIMEOUT_URL=https://your-domain.com/callbacks/payments/b2c/timeout
+MPESA_B2B_RESULT_URL=https://your-domain.com/callbacks/payments/b2b/result
+MPESA_B2B_TIMEOUT_URL=https://your-domain.com/callbacks/payments/b2b/timeout
+MPESA_TRANSACTION_STATUS_RESULT_URL=https://your-domain.com/callbacks/payments/transaction-status/result
+MPESA_TRANSACTION_STATUS_TIMEOUT_URL=https://your-domain.com/callbacks/payments/transaction-status/timeout
+MPESA_REVERSAL_RESULT_URL=https://your-domain.com/callbacks/payments/reversal/result
+MPESA_REVERSAL_TIMEOUT_URL=https://your-domain.com/callbacks/payments/reversal/timeout
+MPESA_ACCOUNT_BALANCE_RESULT_URL=https://your-domain.com/callbacks/payments/account-balance/result
+MPESA_ACCOUNT_BALANCE_TIMEOUT_URL=https://your-domain.com/callbacks/payments/account-balance/timeout
+MPESA_RATIBA_CALLBACK_URL=https://your-domain.com/callbacks/payments/ratiba
 ```
 
 ## Install Dependencies
@@ -419,26 +481,26 @@ Invoke-RestMethod `
 
 These callback endpoints are available locally:
 
-- `/callbacks/mpesa/stk`
-- `/callbacks/mpesa/c2b/confirmation`
-- `/callbacks/mpesa/c2b/validation`
-- `/callbacks/mpesa/b2c/result`
-- `/callbacks/mpesa/b2c/timeout`
-- `/callbacks/mpesa/b2b/result`
-- `/callbacks/mpesa/b2b/timeout`
-- `/callbacks/mpesa/transaction-status/result`
-- `/callbacks/mpesa/transaction-status/timeout`
-- `/callbacks/mpesa/reversal/result`
-- `/callbacks/mpesa/reversal/timeout`
-- `/callbacks/mpesa/account-balance/result`
-- `/callbacks/mpesa/account-balance/timeout`
+- `/callbacks/payments/stk`
+- `/callbacks/payments/c2b/confirmation`
+- `/callbacks/payments/c2b/validation`
+- `/callbacks/payments/b2c/result`
+- `/callbacks/payments/b2c/timeout`
+- `/callbacks/payments/b2b/result`
+- `/callbacks/payments/b2b/timeout`
+- `/callbacks/payments/transaction-status/result`
+- `/callbacks/payments/transaction-status/timeout`
+- `/callbacks/payments/reversal/result`
+- `/callbacks/payments/reversal/timeout`
+- `/callbacks/payments/account-balance/result`
+- `/callbacks/payments/account-balance/timeout`
 
 You can locally test a callback route with:
 
 ```powershell
 Invoke-RestMethod `
   -Method Post `
-  -Uri "http://127.0.0.1:8000/callbacks/mpesa/stk" `
+  -Uri "http://127.0.0.1:8000/callbacks/payments/stk" `
   -ContentType "application/json" `
   -Body '{
     "Body": {

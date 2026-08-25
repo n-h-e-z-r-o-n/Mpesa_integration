@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0b1015;
+  --surface: #111821;
+  --surface-2: #16202b;
+  --surface-3: #1a2531;
+  --border: #253243;
+  --text: #ecf1f7;
+  --text-muted: #8e9aac;
+  --success: #5ebc83;
+  --warning: #c6a358;
+  --danger: #d36c6c;
+  --info: #6ea8d9;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--text);
+  --font-sans: var(--font-ibm-sans);
+  --font-mono: var(--font-ibm-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+}
+
+body {
+  background: var(--background);
+  color: var(--text);
+  font-family: var(--font-sans), sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: #27456a;
+  color: #f6f8fb;
+}
+
+.console-shell {
+  background:
+    radial-gradient(circle at top left, rgba(43, 64, 89, 0.4), transparent 28%),
+    linear-gradient(180deg, #0b1015 0%, #0d131b 100%);
+}
+
+.panel {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 92%, black 8%);
+}
+
+.panel-muted {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 94%, black 6%);
+}
+
+.mono {
+  font-family: var(--font-mono), monospace;
+}
+
+.thin-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: #2a394b;
+}
+
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}

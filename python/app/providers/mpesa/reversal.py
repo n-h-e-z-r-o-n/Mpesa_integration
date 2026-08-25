@@ -39,4 +39,4 @@ def reverse_transaction(
         "Occasion": occasion.strip(),
     }
 
-    return send_post_request("/mpesa/reversal/v1/request", payload)
+    return send_post_request(settings.MPESA_REVERSAL_PATH, payload)

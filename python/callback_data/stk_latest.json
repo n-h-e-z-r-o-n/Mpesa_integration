@@ -1,13 +1,13 @@
 {
   "callback_name": "stk",
-  "received_at_utc": "2026-08-17T17:45:33.809672+00:00",
+  "received_at_utc": "2026-08-24T12:25:57.018659+00:00",
   "payload": {
     "Body": {
       "stkCallback": {
-        "MerchantRequestID": "da1a-40dc-9991-3666f466e60e418858",
-        "CheckoutRequestID": "ws_CO_17082026204532697714415034",
-        "ResultCode": 2002,
-        "ResultDesc": "Failed. The Agent number and Store number entered do not match."
+        "MerchantRequestID": "2ad8-4b00-b717-dd855db894452424004",
+        "CheckoutRequestID": "ws_CO_24082026152546302714415034",
+        "ResultCode": 1032,
+        "ResultDesc": "Request Cancelled by user."
       }
     }
   }

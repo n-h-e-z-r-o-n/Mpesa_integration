@@ -13,7 +13,4 @@ def create_ratiba_standing_order(payload: dict[str, Any]) -> dict[str, Any]:
     if not ratiba_payload.get("CallBackURL"):
         ratiba_payload["CallBackURL"] = settings.ratiba_callback_url
 
-    return send_post_request(
-        "/standingorder/v1/createStandingOrderExternal",
-        ratiba_payload,
-    )
+    return send_post_request(settings.MPESA_RATIBA_PATH, ratiba_payload)

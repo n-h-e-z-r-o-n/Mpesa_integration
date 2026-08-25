@@ -40,4 +40,4 @@ def send_b2b_payment(
         "AccountReference": account_reference.strip(),
     }
 
-    return send_post_request("/mpesa/b2b/v1/paymentrequest", payload)
+    return send_post_request(settings.MPESA_B2B_PATH, payload)

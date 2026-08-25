@@ -26,4 +26,4 @@ def simulate_c2b_payment(
         "BillRefNumber": bill_ref_number.strip(),
     }
 
-    return send_post_request("/mpesa/c2b/v1/simulate", payload)
+    return send_post_request(settings.MPESA_C2B_SIMULATE_PATH, payload)

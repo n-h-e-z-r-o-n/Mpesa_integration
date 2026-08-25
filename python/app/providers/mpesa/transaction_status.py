@@ -33,4 +33,4 @@ def query_transaction_status(
         "Occasion": occasion.strip(),
     }
 
-    return send_post_request("/mpesa/transactionstatus/v1/query", payload)
+    return send_post_request(settings.MPESA_TRANSACTION_STATUS_PATH, payload)

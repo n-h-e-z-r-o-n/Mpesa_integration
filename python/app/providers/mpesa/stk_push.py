@@ -65,4 +65,4 @@ def initiate_stk_push(
 
     print(payload)
 
-    return send_post_request("/mpesa/stkpush/v1/processrequest", payload)
+    return send_post_request(settings.MPESA_STK_PUSH_PATH, payload)

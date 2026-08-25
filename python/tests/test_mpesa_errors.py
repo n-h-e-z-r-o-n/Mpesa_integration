@@ -1,54 +1,25 @@
-import unittest
 
-from fastapi import HTTPException
+import requests
 
-from app.api.mpesa import handle_mpesa_error
-from app.providers.mpesa.common import MpesaRequestError, build_mpesa_error_message
+url = "https://api.safaricom.co.ke/mpesa/b2c/v3/paymentrequest"
+payload = {
+  "OriginatorConversationID": "61d2c7329f8445ff8cb0f5694230f430",
+  "InitiatorName": "testapi",
+  "SecurityCredential": "\"F1Rg230W7r68uPborXy8KFMzJUYybR3Uwp2yc2fiT1jJdW4IpX3FNmDbbQd6tLPgIRzUi534VIaPvj+xK8/v15xb9vcOezuMHTP8LqJ+TrsgGQRXbT5RBSDgB+mG+cbt5T/luTAAv7aQDX5JFFrxPQXs1FGhiUrAo9AADTvPsgyTkTzjz8KAEEtATdmbd7e9VlfPu8IGGfNtsNVNsU+JhYce2iubYcQjPuMRaU5UDZ7o9VtD2bvUkiwMjl6ApYyBnKG1S9XNtHdrLNbkTj2hge05oXDbva6isQC426J91HT+SQu93D3VtNuMraNaXeU45EuqyV+uQawD3sQwW6UmgQ==\"",
+  "CommandID": "SalaryPayment",
+  "Amount": 10,
+  "PartyA": "3459545",
+  "PartyB": 254714415034,
+  "Remarks": "ok",
+  "occassion": "",
+  "QueueTimeOutURL": "https://weathered-haze-72159.pktriot.xyz/callbacks/mpesa/b2c/result",
+  "ResultURL": "https://weathered-haze-72159.pktriot.xyz/callbacks/mpesa/b2c/result"
+}
 
+headers = {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer BGB9wU9ZKzsj9gwRN3cfqq3AJRhd"
+}
 
-class MpesaErrorHandlingTests(unittest.TestCase):
-    def test_build_mpesa_error_message_includes_status_code_and_response_fields(self) -> None:
-        message = build_mpesa_error_message(
-            "M-Pesa request failed",
-            status_code=400,
-            response={
-                "errorCode": "400.002.02",
-                "errorMessage": "Bad Request - Invalid Remarks",
-            },
-        )
-
-        self.assertEqual(
-            message,
-            "M-Pesa request failed (status 400) code=400.002.02 message=Bad Request - Invalid Remarks",
-        )
-
-    def test_handle_mpesa_error_preserves_upstream_response_details(self) -> None:
-        error = MpesaRequestError(
-            "M-Pesa request failed (status 400) code=2001 message=Invalid initiator",
-            status_code=400,
-            response={
-                "errorCode": "2001",
-                "errorMessage": "Invalid initiator",
-            },
-        )
-
-        with self.assertRaises(HTTPException) as context:
-            handle_mpesa_error(error)
-
-        exception = context.exception
-        self.assertEqual(exception.status_code, 502)
-        self.assertEqual(
-            exception.detail,
-            {
-                "message": "M-Pesa request failed (status 400) code=2001 message=Invalid initiator",
-                "mpesa_status_code": 400,
-                "mpesa_response": {
-                    "errorCode": "2001",
-                    "errorMessage": "Invalid initiator",
-                },
-            },
-        )
-
-
-if __name__ == "__main__":
-    unittest.main()
+response = requests.post(url, json=payload, headers=headers)
+print(response.json())

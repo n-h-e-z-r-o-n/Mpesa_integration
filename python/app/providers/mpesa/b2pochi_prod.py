@@ -40,4 +40,4 @@ def send_b2pochi_payment(
         "Occasion": occasion.strip(),
     }
 
-    return send_post_request("/mpesa/b2c/v1/paymentrequest", payload)
+    return send_post_request(settings.MPESA_B2POCHI_PATH, payload)

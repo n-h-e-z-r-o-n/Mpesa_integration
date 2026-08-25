@@ -20,4 +20,4 @@ def query_stk_push(checkout_request_id: str) -> dict[str, Any]:
         "CheckoutRequestID": checkout_request_id.strip(),
     }
 
-    return send_post_request("/mpesa/stkpushquery/v1/query", payload)
+    return send_post_request(settings.MPESA_STK_QUERY_PATH, payload)

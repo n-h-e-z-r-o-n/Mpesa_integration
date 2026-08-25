@@ -46,85 +46,85 @@ def accepted_response() -> dict[str, Any]:
     }
 
 
-@router.post("/callbacks/mpesa/stk")
+@router.post("/callbacks/payments/stk")
 async def stk_callback(request: Request) -> dict[str, Any]:
     await log_callback(request, "stk")
     return accepted_response()
 
 
-@router.post("/callbacks/mpesa/c2b/confirmation")
+@router.post("/callbacks/payments/c2b/confirmation")
 async def c2b_confirmation_callback(request: Request) -> dict[str, Any]:
     await log_callback(request, "c2b_confirmation")
     return accepted_response()
 
 
-@router.post("/callbacks/mpesa/c2b/validation")
+@router.post("/callbacks/payments/c2b/validation")
 async def c2b_validation_callback(request: Request) -> dict[str, Any]:
     await log_callback(request, "c2b_validation")
     return accepted_response()
 
 
-@router.post("/callbacks/mpesa/b2c/result")
+@router.post("/callbacks/payments/b2c/result")
 async def b2c_result_callback(request: Request) -> dict[str, Any]:
     await log_callback(request, "b2c_result")
     return accepted_response()
 
 
-@router.post("/callbacks/mpesa/b2c/timeout")
+@router.post("/callbacks/payments/b2c/timeout")
 async def b2c_timeout_callback(request: Request) -> dict[str, Any]:
     await log_callback(request, "b2c_timeout")
     return accepted_response()
 
 
-@router.post("/callbacks/mpesa/b2b/result")
+@router.post("/callbacks/payments/b2b/result")
 async def b2b_result_callback(request: Request) -> dict[str, Any]:
     await log_callback(request, "b2b_result")
     return accepted_response()
 
 
-@router.post("/callbacks/mpesa/b2b/timeout")
+@router.post("/callbacks/payments/b2b/timeout")
 async def b2b_timeout_callback(request: Request) -> dict[str, Any]:
     await log_callback(request, "b2b_timeout")
     return accepted_response()
 
 
-@router.post("/callbacks/mpesa/transaction-status/result")
+@router.post("/callbacks/payments/transaction-status/result")
 async def transaction_status_result_callback(request: Request) -> dict[str, Any]:
     await log_callback(request, "transaction_status_result")
     return accepted_response()
 
 
-@router.post("/callbacks/mpesa/transaction-status/timeout")
+@router.post("/callbacks/payments/transaction-status/timeout")
 async def transaction_status_timeout_callback(request: Request) -> dict[str, Any]:
     await log_callback(request, "transaction_status_timeout")
     return accepted_response()
 
 
-@router.post("/callbacks/mpesa/reversal/result")
+@router.post("/callbacks/payments/reversal/result")
 async def reversal_result_callback(request: Request) -> dict[str, Any]:
     await log_callback(request, "reversal_result")
     return accepted_response()
 
 
-@router.post("/callbacks/mpesa/reversal/timeout")
+@router.post("/callbacks/payments/reversal/timeout")
 async def reversal_timeout_callback(request: Request) -> dict[str, Any]:
     await log_callback(request, "reversal_timeout")
     return accepted_response()
 
 
-@router.post("/callbacks/mpesa/account-balance/result")
+@router.post("/callbacks/payments/account-balance/result")
 async def account_balance_result_callback(request: Request) -> dict[str, Any]:
     await log_callback(request, "account_balance_result")
     return accepted_response()
 
 
-@router.post("/callbacks/mpesa/account-balance/timeout")
+@router.post("/callbacks/payments/account-balance/timeout")
 async def account_balance_timeout_callback(request: Request) -> dict[str, Any]:
     await log_callback(request, "account_balance_timeout")
     return accepted_response()
 
 
-@router.post("/callbacks/mpesa/ratiba")
+@router.post("/callbacks/payments/ratiba")
 async def ratiba_callback(request: Request) -> dict[str, Any]:
     await log_callback(request, "ratiba")
     return accepted_response()

@@ -15,4 +15,4 @@ def register_c2b_urls(response_type: str = "Completed") -> dict[str, Any]:
         "ValidationURL": settings.c2b_validation_url,
     }
 
-    return send_post_request("/mpesa/c2b/v1/registerurl", payload)
+    return send_post_request(settings.MPESA_C2B_REGISTER_PATH, payload)

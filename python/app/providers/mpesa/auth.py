@@ -41,10 +41,7 @@ def get_access_token() -> str:
 def fetch_access_token() -> str:
     global _token_expires_at
 
-    url = (
-        f"{settings.MPESA_BASE_URL.rstrip('/')}"
-        "/oauth/v1/generate?grant_type=client_credentials"
-    )
+    url = f"{settings.MPESA_BASE_URL.rstrip('/')}{settings.MPESA_AUTH_PATH}"
 
     try:
         response = get_session().get(
@@ -80,6 +77,14 @@ def fetch_access_token() -> str:
     _token_expires_at = (
         time.monotonic() + expires_in - TOKEN_REFRESH_MARGIN_SECONDS
     )
+
+    print("OAuth URL:", url)
+    print("OAuth status:", response.status_code)
+    print("OAuth response keys:", list(data.keys()))
+    print("Token length:", len(access_token))
+    print("Expires in:", expires_in)
+    print("Token prefix:", access_token[:8])
+    print("Token suffix:", access_token[-4:])
 
     return access_token
 

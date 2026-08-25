@@ -1,0 +1,20 @@
+{
+  "callback_name": "reversal_result",
+  "received_at_utc": "2026-08-25T06:39:01.094413+00:00",
+  "payload": {
+    "Result": {
+      "ResultType": 0,
+      "ResultCode": "R000002",
+      "ResultDesc": "The OriginalTransactionID is invalid.",
+      "OriginatorConversationID": "f83b-4611-bd94-a8f95cdd678a1440204",
+      "ConversationID": "AG_20260825_010018260kn70vvdrzon",
+      "TransactionID": "UHP1000000",
+      "ReferenceData": {
+        "ReferenceItem": {
+          "Key": "QueueTimeoutURL",
+          "Value": "https://internalapi.safaricom.co.ke/mpesa/reversalresults/v1/submit"
+        }
+      }
+    }
+  }
+}

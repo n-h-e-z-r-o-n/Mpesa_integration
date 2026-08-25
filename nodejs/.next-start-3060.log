@@ -1,0 +1,12 @@
+
+> zadhron-pay@0.1.0 start
+> next start -p 3060
+
+▲ Next.js 16.3.2
+- Local:         http://localhost:3060
+- Network:       http://192.168.100.27:3060
+✓ Ready in 713ms
+✓ Running next.config.ts took 144ms
+{"level":"info","message":"Administrator logged in","data":{"email":"ops@zadhron.com"}}
+{"level":"info","message":"Administrator logged in","data":{"email":"ops@zadhron.com"}}
+{"level":"info","message":"Administrator logged in","data":{"email":"ops@zadhron.com"}}

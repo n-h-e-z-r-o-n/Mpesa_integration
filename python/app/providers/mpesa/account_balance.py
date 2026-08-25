@@ -26,4 +26,4 @@ def query_account_balance(
         "ResultURL": settings.account_balance_result_url,
     }
 
-    return send_post_request("/mpesa/accountbalance/v1/query", payload)
+    return send_post_request(settings.MPESA_ACCOUNT_BALANCE_PATH, payload)
