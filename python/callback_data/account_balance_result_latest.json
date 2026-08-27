@@ -1,14 +1,14 @@
 {
   "callback_name": "account_balance_result",
-  "received_at_utc": "2026-08-25T06:38:27.714527+00:00",
+  "received_at_utc": "2026-08-27T14:40:22.005271+00:00",
   "payload": {
     "Result": {
       "ResultType": 0,
-      "ResultCode": "TP40153",
-      "ResultDesc": "The operator has no permission to perform this operation or does not belong to the specified organization.",
-      "OriginatorConversationID": "76cf-46be-b115-a8b77673fa73497468",
-      "ConversationID": "AG_20260825_010020770knvtvgjsiqp",
-      "TransactionID": "UHP1000000",
+      "ResultCode": 0,
+      "ResultDesc": "The service request is processed successfully.",
+      "OriginatorConversationID": "d4ce-4853-8deb-a3ac221ebc61164097",
+      "ConversationID": "AG_20260827_0100203111vmhywh69gl",
+      "TransactionID": "UHR0000000",
       "ResultParameters": {
         "ResultParameter": [
           {
@@ -16,12 +16,12 @@
             "Value": "AccountBalance"
           },
           {
-            "Key": "ErrorMsg",
-            "Value": "The operator has no permission to perform this operation or does not belong to the specified organization."
+            "Key": "AccountBalance",
+            "Value": "Working Account|KES|0.00|0.00|0.00|0.00&Utility Account|KES|23.00|23.00|0.00|0.00&Charges Paid Account|KES|0.00|0.00|0.00|0.00&Merchant Account|KES|0.00|0.00|0.00|0.00&Airtime Purchase Account|KES|0.00|0.00|0.00|0.00&Organization Settlement Account|KES|0.00|0.00|0.00|0.00&Loan Disbursement Account|KES|0.00|0.00|0.00|0.00&Advanced Deduction Account|KES|0.00|0.00|0.00|0.00&Savings Deduction Account|KES|0.00|0.00|0.00|0.00&SFC Device Insurance Claims Disbursement Account|KES|0.00|0.00|0.00|0.00"
           },
           {
             "Key": "BOCompletedTime",
-            "Value": 20260825093826
+            "Value": 20260827174021
           }
         ]
       },

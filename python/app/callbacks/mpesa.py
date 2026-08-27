@@ -128,3 +128,9 @@ async def account_balance_timeout_callback(request: Request) -> dict[str, Any]:
 async def ratiba_callback(request: Request) -> dict[str, Any]:
     await log_callback(request, "ratiba")
     return accepted_response()
+
+
+@router.post("/callbacks/payments/pull-transactions")
+async def pull_transactions_callback(request: Request) -> dict[str, Any]:
+    await log_callback(request, "pull_transactions")
+    return accepted_response()

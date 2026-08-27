@@ -145,6 +145,17 @@ def build_stk_password(timestamp: str) -> str:
     return base64.b64encode(raw_value.encode("utf-8")).decode("utf-8")
 
 
+def resolve_mpesa_path(default_path: str, path_override: str | None = None) -> str:
+    path = (path_override or default_path).strip()
+    if not path:
+        raise ValueError("M-Pesa product path is not configured")
+    if not path.startswith("/"):
+        raise ValueError("path_override must start with '/'")
+    if path.startswith("//") or "://" in path:
+        raise ValueError("path_override must be a relative M-Pesa path")
+    return path
+
+
 def require_initiator_credentials() -> tuple[str, str]:
     if not settings.MPESA_INITIATOR_NAME:
         raise ValueError("MPESA_INITIATOR_NAME is required for this endpoint")

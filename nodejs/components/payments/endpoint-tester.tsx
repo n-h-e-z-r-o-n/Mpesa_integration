@@ -43,7 +43,21 @@ export function EndpointTester({ operations }: Props) {
     return Object.fromEntries(
       operation.fields
         .filter((field) => formValues[field.name]?.trim())
-        .map((field) => [field.name, field.type === "number" ? Number(formValues[field.name]) : formValues[field.name]]),
+        .map((field) => {
+          const rawValue = formValues[field.name];
+          if (field.type === "number") {
+            return [field.name, Number(rawValue)];
+          }
+          if (field.name === "payload") {
+            try {
+              return [field.name, JSON.parse(rawValue)];
+            } catch {
+              return [field.name, { invalidJson: true, raw: rawValue }];
+            }
+          }
+
+          return [field.name, rawValue];
+        }),
     );
   }, [formValues, operation, rawJson, rawMode]);
 

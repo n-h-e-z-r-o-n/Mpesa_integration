@@ -3,6 +3,13 @@ from app.providers.mpesa.auth import get_access_token
 from app.providers.mpesa.b2b import send_b2b_payment
 from app.providers.mpesa.b2c import send_b2c_payment
 from app.providers.mpesa.b2pochi_prod import send_b2pochi_payment
+from app.providers.mpesa.bill_manager import (
+    cancel_bill_manager_bulk_invoices,
+    cancel_bill_manager_single_invoice,
+    create_bill_manager_bulk_invoices,
+    create_bill_manager_single_invoice,
+    send_bill_manager_request,
+)
 from app.providers.mpesa.c2b_register import register_c2b_urls
 from app.providers.mpesa.c2b_simulate import simulate_c2b_payment
 from app.providers.mpesa.common import (
@@ -11,6 +18,18 @@ from app.providers.mpesa.common import (
     MpesaIndeterminateError,
     MpesaRequestError,
     normalize_phone,
+)
+from app.providers.mpesa.dynamic_qrcode import generate_dynamic_qrcode
+from app.providers.mpesa.mobile_number_validation import (
+    check_ati_mobile_number,
+    validate_mobile_number,
+)
+from app.providers.mpesa.pull_transactions import (
+    build_pull_transactions_registration_payload,
+    pull_transactions,
+    query_pull_transactions,
+    register_pull_transactions,
+    register_pull_transactions_from_settings,
 )
 from app.providers.mpesa.ratiba import create_ratiba_standing_order
 from app.providers.mpesa.reversal import reverse_transaction
@@ -36,4 +55,17 @@ __all__ = [
     "reverse_transaction",
     "query_account_balance",
     "create_ratiba_standing_order",
+    "generate_dynamic_qrcode",
+    "create_bill_manager_single_invoice",
+    "create_bill_manager_bulk_invoices",
+    "cancel_bill_manager_single_invoice",
+    "cancel_bill_manager_bulk_invoices",
+    "send_bill_manager_request",
+    "build_pull_transactions_registration_payload",
+    "query_pull_transactions",
+    "register_pull_transactions",
+    "register_pull_transactions_from_settings",
+    "pull_transactions",
+    "check_ati_mobile_number",
+    "validate_mobile_number",
 ]

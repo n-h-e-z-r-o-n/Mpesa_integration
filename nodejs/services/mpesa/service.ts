@@ -16,6 +16,7 @@ import {
   ensureC2BCallbackUrlAllowed,
   nairobiTimestamp,
   normalizePhone,
+  resolveMpesaPath,
   sanitizeAlphaNumeric,
 } from "@/lib/mpesa/utils";
 import { logEvent, sanitizeForLogs } from "@/lib/logger";
@@ -61,7 +62,14 @@ function getSafeStatus(operation: MpesaOperation, payload: Record<string, unknow
   }
 
   if (
-    ["b2c", "b2b", "businessToPochi", "transactionStatus", "reversal", "accountBalance"].includes(
+    [
+      "b2c",
+      "b2b",
+      "businessToPochi",
+      "transactionStatus",
+      "reversal",
+      "accountBalance",
+    ].includes(
       operation,
     )
   ) {
@@ -412,6 +420,32 @@ function preparePayload(operation: MpesaOperation, input: Record<string, unknown
         },
       };
     }
+    case "dynamicQrCode":
+      return {
+        path: resolveMpesaPath(config.dynamicQrCodePath, input.pathOverride as string | undefined),
+        requestPayload: { ...(input.payload as Record<string, unknown>) },
+      };
+    case "billManager":
+      return {
+        path: resolveMpesaPath(config.billManagerPath, input.pathOverride as string | undefined),
+        requestPayload: { ...(input.payload as Record<string, unknown>) },
+      };
+    case "pullTransactions":
+      return {
+        path: resolveMpesaPath(
+          config.pullTransactionsPath,
+          input.pathOverride as string | undefined,
+        ),
+        requestPayload: { ...(input.payload as Record<string, unknown>) },
+      };
+    case "mobileNumberValidation":
+      return {
+        path: resolveMpesaPath(
+          config.mobileNumberValidationPath,
+          input.pathOverride as string | undefined,
+        ),
+        requestPayload: { ...(input.payload as Record<string, unknown>) },
+      };
     case "transactionStatus": {
       const credentials = requireInitiatorConfig();
       return {

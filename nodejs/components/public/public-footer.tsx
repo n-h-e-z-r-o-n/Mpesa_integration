@@ -29,17 +29,27 @@ export function PublicFooter() {
           <div>
             <h2 className="text-sm font-medium text-white">Product</h2>
             <div className="mt-4 space-y-3">
-              <Link href="/#products" className="block text-sm hover:text-white">Payments</Link>
-              <Link href="/#capabilities" className="block text-sm hover:text-white">Payouts</Link>
-              <Link href="/#developers" className="block text-sm hover:text-white">Transactions</Link>
-              <Link href="/#solutions" className="block text-sm hover:text-white">Monitoring</Link>
+              <Link href="/#products" className="block text-sm hover:text-white">
+                Payments
+              </Link>
+              <Link href="/#solutions" className="block text-sm hover:text-white">
+                Payouts
+              </Link>
+              <Link href="/#developers" className="block text-sm hover:text-white">
+                Transactions
+              </Link>
+              <Link href="/#pricing" className="block text-sm hover:text-white">
+                Monitoring
+              </Link>
             </div>
           </div>
 
           <div>
             <h2 className="text-sm font-medium text-white">Developers</h2>
             <div className="mt-4 space-y-3">
-              <Link href="/docs" className="block text-sm hover:text-white">Documentation</Link>
+              <Link href="/docs" className="block text-sm hover:text-white">
+                Documentation
+              </Link>
               <PlannedLink label="API reference" />
               <PlannedLink label="Status" />
               <PlannedLink label="Changelog" />
@@ -49,8 +59,12 @@ export function PublicFooter() {
           <div>
             <h2 className="text-sm font-medium text-white">Company</h2>
             <div className="mt-4 space-y-3">
-              <a href="https://zadhron.com" className="block text-sm hover:text-white">Zadhron</a>
-              <a href="mailto:hello@zadhron.com" className="block text-sm hover:text-white">Contact</a>
+              <a href="https://zadhron.com" className="block text-sm hover:text-white">
+                Zadhron
+              </a>
+              <a href="mailto:hello@zadhron.com" className="block text-sm hover:text-white">
+                Contact
+              </a>
               <PlannedLink label="About" />
             </div>
           </div>
@@ -65,7 +79,7 @@ export function PublicFooter() {
         </div>
 
         <div className="mt-12 border-t border-slate-800 pt-6 text-sm text-slate-500">
-          © Zadhron
+          Copyright Zadhron
         </div>
       </div>
     </footer>

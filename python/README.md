@@ -31,6 +31,10 @@ Each provider capability is in its own file:
 - `c2b_simulate.py`: sandbox C2B simulation
 - `b2c.py`: B2C payouts
 - `b2b.py`: B2B payments
+- `dynamic_qrcode.py`: Dynamic QR generation
+- `bill_manager.py`: Bill Manager pass-through requests
+- `pull_transactions.py`: Pull Transactions pass-through requests
+- `mobile_number_validation.py`: mobile validation pass-through requests
 - `transaction_status.py`: transaction status query
 - `reversal.py`: reversal request
 - `account_balance.py`: account balance query
@@ -132,6 +136,62 @@ These env values control the exact Safaricom OAuth and API paths used by this ga
 - B2B payment path.
 - Default: `/mpesa/b2b/v1/paymentrequest`
 
+`MPESA_DYNAMIC_QRCODE_PATH`
+- Dynamic QR code path.
+- Default: `/mpesa/qrcode/v1/generate`
+
+`MPESA_BILL_MANAGER_PATH`
+- Default Bill Manager path.
+- Default: `/v1/billmanager-invoice/create-single-invoice`
+
+`MPESA_DYNAMIC_QRCODE_GENERATE_PATH`
+- Explicit path for `/api/v1/mpesa/dynamic-qrcode/generate`.
+- Default: `/mpesa/qrcode/v1/generate`
+
+`MPESA_BILL_MANAGER_CREATE_SINGLE_INVOICE_PATH`
+- Explicit path for `/api/v1/mpesa/bill-manager/invoices/create-single`.
+- Default: `/v1/billmanager-invoice/create-single-invoice`
+
+`MPESA_BILL_MANAGER_CREATE_BULK_INVOICES_PATH`
+- Explicit path for `/api/v1/mpesa/bill-manager/invoices/create-bulk`.
+- Default: `/v1/billmanager-invoice/create-bulk-invoices`
+
+`MPESA_BILL_MANAGER_CANCEL_SINGLE_INVOICE_PATH`
+- Explicit path for `/api/v1/mpesa/bill-manager/invoices/cancel-single`.
+- Default: `/v1/billmanager-invoice/cancel-single-invoice`
+
+`MPESA_BILL_MANAGER_CANCEL_BULK_INVOICES_PATH`
+- Explicit path for `/api/v1/mpesa/bill-manager/invoices/cancel-bulk`.
+- Default: `/v1/billmanager-invoice/cancel-bulk-invoices`
+
+`MPESA_PULL_TRANSACTIONS_PATH`
+- Default Pull Transactions path.
+- Default: `/pulltransactions/v1/query`
+
+`MPESA_PULL_TRANSACTIONS_QUERY_PATH`
+- Explicit path for `/api/v1/mpesa/pull-transactions/query`.
+- Default: `/pulltransactions/v1/query`
+
+`MPESA_PULL_TRANSACTIONS_REGISTER_PATH`
+- Explicit path for `/api/v1/mpesa/pull-transactions/register`.
+- Default: `/pulltransactions/v1/register`
+
+`MPESA_PULL_TRANSACTIONS_REQUEST_TYPE`
+- Registration request type for Pull Transactions.
+- Default: `Pull`
+
+`MPESA_PULL_TRANSACTIONS_NOMINATED_NUMBER`
+- Safaricom MSISDN used during Pull Transactions registration.
+- Required by `/api/v1/mpesa/pull-transactions/register`
+
+`MPESA_MOBILE_NUMBER_VALIDATION_PATH`
+- Default Mobile Number Validation path.
+- Default: `/imsi/v2/checkATI`
+
+`MPESA_MOBILE_NUMBER_VALIDATION_CHECK_ATI_PATH`
+- Explicit path for `/api/v1/mpesa/mobile-number-validation/check-ati`.
+- Default: `/imsi/v2/checkATI`
+
 `MPESA_TRANSACTION_STATUS_PATH`
 - Transaction status query path.
 - Default: `/mpesa/transactionstatus/v1/query`
@@ -192,6 +252,12 @@ Avoid using the words `M-PESA`, `M-Pesa`, or `mpesa` anywhere in these callback 
 `MPESA_ACCOUNT_BALANCE_TIMEOUT_URL`
 - Account balance timeout callback.
 
+`MPESA_RATIBA_CALLBACK_URL`
+- Ratiba callback URL.
+
+`MPESA_PULL_TRANSACTIONS_CALLBACK_URL`
+- Pull Transactions callback URL.
+
 ## Example `.env`
 
 ```env
@@ -220,6 +286,20 @@ MPESA_C2B_SIMULATE_PATH=/mpesa/c2b/v2/simulate
 MPESA_B2C_PATH=/mpesa/b2c/v3/paymentrequest
 MPESA_B2POCHI_PATH=/mpesa/b2c/v1/paymentrequest
 MPESA_B2B_PATH=/mpesa/b2b/v1/paymentrequest
+MPESA_DYNAMIC_QRCODE_PATH=/mpesa/qrcode/v1/generate
+MPESA_BILL_MANAGER_PATH=/v1/billmanager-invoice/create-single-invoice
+MPESA_PULL_TRANSACTIONS_PATH=/pulltransactions/v1/query
+MPESA_MOBILE_NUMBER_VALIDATION_PATH=/imsi/v2/checkATI
+MPESA_DYNAMIC_QRCODE_GENERATE_PATH=/mpesa/qrcode/v1/generate
+MPESA_BILL_MANAGER_CREATE_SINGLE_INVOICE_PATH=/v1/billmanager-invoice/create-single-invoice
+MPESA_BILL_MANAGER_CREATE_BULK_INVOICES_PATH=/v1/billmanager-invoice/create-bulk-invoices
+MPESA_BILL_MANAGER_CANCEL_SINGLE_INVOICE_PATH=/v1/billmanager-invoice/cancel-single-invoice
+MPESA_BILL_MANAGER_CANCEL_BULK_INVOICES_PATH=/v1/billmanager-invoice/cancel-bulk-invoices
+MPESA_PULL_TRANSACTIONS_QUERY_PATH=/pulltransactions/v1/query
+MPESA_PULL_TRANSACTIONS_REGISTER_PATH=/pulltransactions/v1/register
+MPESA_PULL_TRANSACTIONS_REQUEST_TYPE=Pull
+MPESA_PULL_TRANSACTIONS_NOMINATED_NUMBER=0722000000
+MPESA_MOBILE_NUMBER_VALIDATION_CHECK_ATI_PATH=/imsi/v2/checkATI
 MPESA_TRANSACTION_STATUS_PATH=/mpesa/transactionstatus/v1/query
 MPESA_REVERSAL_PATH=/mpesa/reversal/v1/request
 MPESA_ACCOUNT_BALANCE_PATH=/mpesa/accountbalance/v1/query
@@ -239,6 +319,7 @@ MPESA_REVERSAL_TIMEOUT_URL=https://your-domain.com/callbacks/payments/reversal/t
 MPESA_ACCOUNT_BALANCE_RESULT_URL=https://your-domain.com/callbacks/payments/account-balance/result
 MPESA_ACCOUNT_BALANCE_TIMEOUT_URL=https://your-domain.com/callbacks/payments/account-balance/timeout
 MPESA_RATIBA_CALLBACK_URL=https://your-domain.com/callbacks/payments/ratiba
+MPESA_PULL_TRANSACTIONS_CALLBACK_URL=https://your-domain.com/callbacks/payments/pull-transactions
 ```
 
 ## Install Dependencies
@@ -477,6 +558,83 @@ Invoke-RestMethod `
   }'
 ```
 
+### 12. Dynamic QRCode
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/mpesa/dynamic-qrcode/generate" `
+  -Headers @{ "x-api-key" = "change-me" } `
+  -ContentType "application/json" `
+  -Body '{
+    "MerchantName": "Demo Store",
+    "RefNo": "INV1001",
+    "Amount": "10",
+    "TrxCode": "BG",
+    "CPI": "174379",
+    "Size": "300"
+  }'
+```
+
+### 13. Bill Manager
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/mpesa/bill-manager/invoices/cancel-bulk" `
+  -Headers @{ "x-api-key" = "change-me" } `
+  -ContentType "application/json" `
+  -Body '{
+    "externalReference": "BILL-1001"
+  }'
+```
+
+### 14. Pull Transactions
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/mpesa/pull-transactions/query" `
+  -Headers @{ "x-api-key" = "change-me" } `
+  -ContentType "application/json" `
+  -Body '{
+    "ShortCode": "174379",
+    "StartDate": "2026-08-26 00:00:00",
+    "EndDate": "2026-08-26 23:59:59",
+    "OffSetValue": "0"
+  }'
+```
+
+Pull Transactions registration is env-driven, so the normal call does not need a body:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/mpesa/pull-transactions/register" `
+  -Headers @{ "x-api-key" = "change-me" }
+```
+
+The gateway fills these fields automatically:
+
+- `ShortCode` from `MPESA_SHORTCODE`
+- `RequestType` from `MPESA_PULL_TRANSACTIONS_REQUEST_TYPE`
+- `NominatedNumber` from `MPESA_PULL_TRANSACTIONS_NOMINATED_NUMBER`
+- `CallBackURL` from `MPESA_PULL_TRANSACTIONS_CALLBACK_URL`
+- fallback callback URL: `{PUBLIC_BASE_URL}/callbacks/payments/pull-transactions`
+
+### 15. Mobile Number Validation
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/mpesa/mobile-number-validation/check-ati" `
+  -Headers @{ "x-api-key" = "change-me" } `
+  -ContentType "application/json" `
+  -Body '{
+    "phoneNumber": "254714415034"
+  }'
+```
+
 ## Callback Test Cases
 
 These callback endpoints are available locally:
@@ -494,6 +652,7 @@ These callback endpoints are available locally:
 - `/callbacks/payments/reversal/timeout`
 - `/callbacks/payments/account-balance/result`
 - `/callbacks/payments/account-balance/timeout`
+- `/callbacks/payments/pull-transactions`
 
 You can locally test a callback route with:
 

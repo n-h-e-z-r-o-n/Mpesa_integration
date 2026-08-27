@@ -29,6 +29,10 @@ Production-oriented Next.js payment gateway and internal operations console for 
 - `POST /api/mpesa/b2c`
 - `POST /api/mpesa/b2b`
 - `POST /api/mpesa/business-to-pochi`
+- `POST /api/mpesa/dynamic-qrcode`
+- `POST /api/mpesa/bill-manager`
+- `POST /api/mpesa/pull-transactions`
+- `POST /api/mpesa/mobile-number-validation`
 - `POST /api/mpesa/transaction-status`
 - `POST /api/mpesa/reversal`
 - `POST /api/mpesa/account-balance`

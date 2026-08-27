@@ -39,6 +39,20 @@ class Settings(BaseSettings):
     MPESA_REVERSAL_PATH: str = "/mpesa/reversal/v1/request"
     MPESA_ACCOUNT_BALANCE_PATH: str = "/mpesa/accountbalance/v1/query"
     MPESA_RATIBA_PATH: str = "/standingorder/v1/createStandingOrderExternal"
+    MPESA_DYNAMIC_QRCODE_PATH: str = "/mpesa/qrcode/v1/generate"
+    MPESA_BILL_MANAGER_PATH: str = "/v1/billmanager-invoice/create-single-invoice"
+    MPESA_PULL_TRANSACTIONS_PATH: str = "/pulltransactions/v1/query"
+    MPESA_MOBILE_NUMBER_VALIDATION_PATH: str = "/imsi/v2/checkATI"
+    MPESA_DYNAMIC_QRCODE_GENERATE_PATH: str | None = None
+    MPESA_BILL_MANAGER_CREATE_SINGLE_INVOICE_PATH: str | None = None
+    MPESA_BILL_MANAGER_CREATE_BULK_INVOICES_PATH: str = "/v1/billmanager-invoice/create-bulk-invoices"
+    MPESA_BILL_MANAGER_CANCEL_SINGLE_INVOICE_PATH: str = "/v1/billmanager-invoice/cancel-single-invoice"
+    MPESA_BILL_MANAGER_CANCEL_BULK_INVOICES_PATH: str = "/v1/billmanager-invoice/cancel-bulk-invoices"
+    MPESA_PULL_TRANSACTIONS_QUERY_PATH: str | None = None
+    MPESA_PULL_TRANSACTIONS_REGISTER_PATH: str = "/pulltransactions/v1/register"
+    MPESA_PULL_TRANSACTIONS_REQUEST_TYPE: str = "Pull"
+    MPESA_PULL_TRANSACTIONS_NOMINATED_NUMBER: str | None = None
+    MPESA_MOBILE_NUMBER_VALIDATION_CHECK_ATI_PATH: str | None = None
 
     MPESA_B2C_RESULT_URL: str | None = None
     MPESA_B2C_TIMEOUT_URL: str | None = None
@@ -51,6 +65,7 @@ class Settings(BaseSettings):
     MPESA_ACCOUNT_BALANCE_RESULT_URL: str | None = None
     MPESA_ACCOUNT_BALANCE_TIMEOUT_URL: str | None = None
     MPESA_RATIBA_CALLBACK_URL: str | None = None
+    MPESA_PULL_TRANSACTIONS_CALLBACK_URL: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -159,6 +174,35 @@ class Settings(BaseSettings):
         return self.MPESA_RATIBA_CALLBACK_URL or self._build_url(
             self.PUBLIC_BASE_URL,
             "/callbacks/payments/ratiba",
+        )
+
+    @property
+    def pull_transactions_callback_url(self) -> str:
+        return self.MPESA_PULL_TRANSACTIONS_CALLBACK_URL or self._build_url(
+            self.PUBLIC_BASE_URL,
+            "/callbacks/payments/pull-transactions",
+        )
+
+    @property
+    def dynamic_qrcode_generate_path(self) -> str:
+        return self.MPESA_DYNAMIC_QRCODE_GENERATE_PATH or self.MPESA_DYNAMIC_QRCODE_PATH
+
+    @property
+    def bill_manager_create_single_invoice_path(self) -> str:
+        return (
+            self.MPESA_BILL_MANAGER_CREATE_SINGLE_INVOICE_PATH
+            or self.MPESA_BILL_MANAGER_PATH
+        )
+
+    @property
+    def pull_transactions_query_path(self) -> str:
+        return self.MPESA_PULL_TRANSACTIONS_QUERY_PATH or self.MPESA_PULL_TRANSACTIONS_PATH
+
+    @property
+    def mobile_number_validation_check_ati_path(self) -> str:
+        return (
+            self.MPESA_MOBILE_NUMBER_VALIDATION_CHECK_ATI_PATH
+            or self.MPESA_MOBILE_NUMBER_VALIDATION_PATH
         )
 
 

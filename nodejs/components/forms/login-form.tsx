@@ -48,8 +48,8 @@ export function LoginForm({ signedInEmail }: Props) {
         <div className="mb-5 rounded-[1.6rem] border border-sky-300/15 bg-sky-400/8 p-4 text-sm text-slate-700">
           <div className="font-medium text-slate-900">Session already available</div>
           <p className="mt-2 leading-7">
-            Signed in as <span className="mono text-slate-950">{signedInEmail}</span>. You can
-            continue into the current console or sign in again.
+            You are signed in as <span className="mono text-slate-950">{signedInEmail}</span>.
+            Continue to your workspace or sign in again with a different account.
           </p>
           <Link
             href="/dashboard"
@@ -64,11 +64,10 @@ export function LoginForm({ signedInEmail }: Props) {
         Welcome back
       </div>
       <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-slate-950">
-        Sign in to Zadhron Payments
+        Sign in
       </h1>
       <p className="mt-3 text-sm leading-7 text-slate-600">
-        Continue into the current operations environment. Broader customer and developer account
-        onboarding is being prepared separately.
+        Sign in to manage payments, disbursements, and account activity.
       </p>
 
       <label className="mt-8 block text-sm text-slate-800">
@@ -76,7 +75,7 @@ export function LoginForm({ signedInEmail }: Props) {
         <input
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none transition focus:border-slate-900"
+          className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none transition focus:border-sky-700"
           type="email"
           autoComplete="email"
           required
@@ -88,7 +87,7 @@ export function LoginForm({ signedInEmail }: Props) {
         <input
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none transition focus:border-slate-900"
+          className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-slate-950 outline-none transition focus:border-sky-700"
           type="password"
           autoComplete="current-password"
           required
@@ -102,8 +101,19 @@ export function LoginForm({ signedInEmail }: Props) {
         disabled={pending}
         className="mt-6 w-full rounded-full bg-[#08111a] px-4 py-3 text-sm font-medium text-white transition hover:bg-[#112133] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {pending ? "Signing In..." : "Sign In"}
+        {pending ? "Signing in..." : "Sign in"}
       </button>
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        {["Secure access", "Encrypted session", "Business payments"].map((item) => (
+          <div
+            key={item}
+            className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700"
+          >
+            {item}
+          </div>
+        ))}
+      </div>
 
       <p className="mt-6 text-sm text-slate-600">
         New to Zadhron Payments?{" "}

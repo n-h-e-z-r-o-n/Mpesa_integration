@@ -229,15 +229,15 @@ Request body:
 
 ```json
 {
-  "response_type": "Completed"
-}
+  "OriginatorCoversationID": "6af0-****-****-************9",
+  "ResponseCode": "00000000",
+  "ResponseDescription": "Success"
+
 ```
 
 Field meanings:
 
-- `response_type`: allowed values:
-  - `Completed`
-  - `Cancelled`
+![img.png](img.png) 
 
 Expected response:
 
@@ -688,6 +688,134 @@ Important:
 - the public Daraja Ratiba page was available, but the detailed request schema was not exposed line-by-line in the public page available to this assistant on August 18, 2026
 - this route is therefore implemented as a clean pass-through so you can send the exact Ratiba fields approved for your Safaricom setup
 
+## 12. Dynamic QRCode
+
+Endpoint:
+
+```text
+POST /api/v1/mpesa/dynamic-qrcode/generate
+```
+
+Purpose:
+
+- generates a dynamic M-Pesa QR code
+
+Request body:
+
+```json
+{
+  "MerchantName": "Demo Store",
+  "RefNo": "INV1001",
+  "Amount": "10",
+  "TrxCode": "BG",
+  "CPI": "174379",
+  "Size": "300"
+}
+```
+
+How this endpoint works:
+
+- sends the provided payload to `MPESA_DYNAMIC_QRCODE_GENERATE_PATH`
+- default path is `/mpesa/qrcode/v1/generate`
+
+## 13. Bill Manager
+
+Primary endpoints:
+
+```text
+POST /api/v1/mpesa/bill-manager/invoices/create-single
+POST /api/v1/mpesa/bill-manager/invoices/create-bulk
+POST /api/v1/mpesa/bill-manager/invoices/cancel-single
+POST /api/v1/mpesa/bill-manager/invoices/cancel-bulk
+```
+
+Purpose:
+
+- forwards approved Bill Manager invoice operations through dedicated local routes
+
+Example request body for bulk cancel:
+
+```json
+{
+  "externalReference": "BILL-1001"
+}
+```
+
+How this endpoint works:
+
+- `create-single` uses `MPESA_BILL_MANAGER_CREATE_SINGLE_INVOICE_PATH`
+- `create-bulk` uses `MPESA_BILL_MANAGER_CREATE_BULK_INVOICES_PATH`
+- `cancel-single` uses `MPESA_BILL_MANAGER_CANCEL_SINGLE_INVOICE_PATH`
+- `cancel-bulk` uses `MPESA_BILL_MANAGER_CANCEL_BULK_INVOICES_PATH`
+
+## 14. Pull Transactions
+
+Primary endpoints:
+
+```text
+POST /api/v1/mpesa/pull-transactions/query
+POST /api/v1/mpesa/pull-transactions/register
+```
+
+Purpose:
+
+- The Pull Transactions API is a reconciliation tool that lets partners query all C2B transactions performed under their Pay bill/Till number within the last 48 hours. 
+- registration is exposed as its own local endpoint
+
+Query request body:
+
+```json
+{
+  "ShortCode": "174379",
+  "StartDate": "2026-08-26 00:00:00",
+  "EndDate": "2026-08-26 23:59:59",
+  "OffSetValue": "0"
+}
+```
+
+Registration request example:
+
+```json
+{}
+```
+
+How this endpoint works:
+
+- `query` uses `MPESA_PULL_TRANSACTIONS_QUERY_PATH`
+- `register` uses `MPESA_PULL_TRANSACTIONS_REGISTER_PATH`
+- `StartDate` and `EndDate` must use `YYYY-MM-DD HH:MM:SS`
+- `register` auto-fills `ShortCode` from `MPESA_SHORTCODE`
+- `register` auto-fills `RequestType` from `MPESA_PULL_TRANSACTIONS_REQUEST_TYPE`
+- `register` auto-fills `NominatedNumber` from `MPESA_PULL_TRANSACTIONS_NOMINATED_NUMBER`
+- `register` auto-fills `CallBackURL` from `MPESA_PULL_TRANSACTIONS_CALLBACK_URL`
+- if `MPESA_PULL_TRANSACTIONS_CALLBACK_URL` is not set, the gateway uses `{PUBLIC_BASE_URL}/callbacks/payments/pull-transactions`
+- you can still pass an optional JSON body when Safaricom requires extra registration fields or an override
+
+## 15. Mobile Number Validation
+
+Primary endpoint:
+
+```text
+POST /api/v1/mpesa/mobile-number-validation/check-ati
+```
+
+Purpose:
+
+- forwards a mobile number validation or related identity check payload approved for your account
+
+Request body:
+
+```json
+{
+  "phoneNumber": "254714415034"
+}
+```
+
+How this endpoint works:
+
+- uses `MPESA_MOBILE_NUMBER_VALIDATION_CHECK_ATI_PATH`
+- default path is `/imsi/v2/checkATI`
+
 ## Callback Endpoints
 
 These endpoints receive JSON directly from Safaricom.
@@ -886,6 +1014,18 @@ Purpose:
 
 - receives Ratiba callback JSON from Safaricom
 
+### Pull Transactions Callback
+
+Endpoint:
+
+```text
+POST /callbacks/payments/pull-transactions
+```
+
+Purpose:
+
+- receives Pull Transactions callback JSON from Safaricom
+
 ## Where Callback JSON Is Saved
 
 The latest callback payloads are saved locally in:
@@ -897,6 +1037,7 @@ Examples:
 - `stk_latest.json`
 - `b2c_result_latest.json`
 - `transaction_status_result_latest.json`
+- `pull_transactions_latest.json`
 
 ## Summary
 
@@ -912,5 +1053,14 @@ Use these endpoints in this order:
 8. `/api/v1/mpesa/transaction-status`
 9. `/api/v1/mpesa/reversal`
 10. `/api/v1/mpesa/account-balance`
+11. `/api/v1/mpesa/ratiba`
+12. `/api/v1/mpesa/dynamic-qrcode/generate`
+13. `/api/v1/mpesa/bill-manager/invoices/create-single`
+14. `/api/v1/mpesa/bill-manager/invoices/create-bulk`
+15. `/api/v1/mpesa/bill-manager/invoices/cancel-single`
+16. `/api/v1/mpesa/bill-manager/invoices/cancel-bulk`
+17. `/api/v1/mpesa/pull-transactions/query`
+18. `/api/v1/mpesa/pull-transactions/register`
+19. `/api/v1/mpesa/mobile-number-validation/check-ati`
 
 Use callback endpoints only for Safaricom callback delivery.

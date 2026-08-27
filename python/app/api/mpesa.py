@@ -1,8 +1,9 @@
 import logging
+from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Body, Header, HTTPException, status
+from pydantic import BaseModel, Field, field_validator
 
 from app.config import settings
 from app.providers.mpesa.account_balance import query_account_balance
@@ -10,9 +11,24 @@ from app.providers.mpesa.auth import get_access_token
 from app.providers.mpesa.b2b import send_b2b_payment
 from app.providers.mpesa.b2c import send_b2c_payment
 from app.providers.mpesa.b2pochi_prod import send_b2pochi_payment
+from app.providers.mpesa.bill_manager import (
+    cancel_bill_manager_bulk_invoices,
+    cancel_bill_manager_single_invoice,
+    create_bill_manager_bulk_invoices,
+    create_bill_manager_single_invoice,
+)
 from app.providers.mpesa.c2b_register import register_c2b_urls
 from app.providers.mpesa.c2b_simulate import simulate_c2b_payment
 from app.providers.mpesa.common import MpesaError
+from app.providers.mpesa.dynamic_qrcode import generate_dynamic_qrcode
+from app.providers.mpesa.mobile_number_validation import (
+    check_ati_mobile_number,
+)
+from app.providers.mpesa.pull_transactions import (
+    build_pull_transactions_registration_payload,
+    query_pull_transactions,
+    register_pull_transactions_from_settings,
+)
 from app.providers.mpesa.ratiba import create_ratiba_standing_order
 from app.providers.mpesa.reversal import reverse_transaction
 from app.providers.mpesa.stk_push import initiate_stk_push
@@ -73,13 +89,41 @@ class StkPushRequest(BaseModel):
     transaction_desc: str
     transaction_type: str = "CustomerPayBillOnline"
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "phone_number": "254714415034",
+                "amount": 10,
+                "account_reference": "INV1001",
+                "transaction_desc": "Payment for order INV1001",
+                "transaction_type": "CustomerPayBillOnline",
+            },
+        },
+    }
+
 
 class StkQueryRequest(BaseModel):
     checkout_request_id: str
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "checkout_request_id": "ws_CO_260820261200001234567890",
+            },
+        },
+    }
+
 
 class C2BRegisterRequest(BaseModel):
     response_type: str = "Completed"
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "response_type": "Completed",
+            },
+        },
+    }
 
 
 class C2BSimulateRequest(BaseModel):
@@ -89,14 +133,39 @@ class C2BSimulateRequest(BaseModel):
     command_id: str = "CustomerPayBillOnline"
     shortcode: str | None = None
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "amount": 10,
+                "phone_number": "254714415034",
+                "bill_ref_number": "INV1001",
+                "command_id": "CustomerPayBillOnline",
+                "shortcode": "600000",
+            },
+        },
+    }
+
 
 class B2CRequest(BaseModel):
-    phone_number: str
-    amount: int = Field(gt=0)
+    phone_number: str = "254714415034"
+    amount: int = 10
     remarks: str
     command_id: str = "BusinessPayment"
     occasion: str = ""
     originator_conversation_id: str | None = None
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "phone_number": "254714415034",
+                "amount": 10,
+                "remarks": "Payout for August promotion",
+                "command_id": "BusinessPayment",
+                "occasion": "Promo payout",
+                "originator_conversation_id": "payout-001",
+            },
+        },
+    }
 
 
 class B2PochiProdRequest(BaseModel):
@@ -106,6 +175,19 @@ class B2PochiProdRequest(BaseModel):
     command_id: str = "BusinessPayToPochi"
     occasion: str = ""
     originator_conversation_id: str | None = None
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "phone_number": "254714415034",
+                "amount": 10,
+                "remarks": "B2Pochi wallet payout",
+                "command_id": "BusinessPayToPochi",
+                "occasion": "Wallet payout",
+                "originator_conversation_id": "pochi-001",
+            },
+        },
+    }
 
 
 class B2BRequest(BaseModel):
@@ -117,6 +199,20 @@ class B2BRequest(BaseModel):
     sender_identifier_type: str = "4"
     receiver_identifier_type: str = "4"
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "receiver_shortcode": "600000",
+                "amount": 10,
+                "remarks": "B2B settlement",
+                "command_id": "BusinessPayBill",
+                "account_reference": "SETTLEMENT-001",
+                "sender_identifier_type": "4",
+                "receiver_identifier_type": "4",
+            },
+        },
+    }
+
 
 class TransactionStatusRequest(BaseModel):
     transaction_id: str
@@ -124,6 +220,18 @@ class TransactionStatusRequest(BaseModel):
     occasion: str = ""
     identifier_type: str = "4"
     command_id: str = "TransactionStatusQuery"
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "transaction_id": "OEI2AK4Q16",
+                "remarks": "Transaction status query",
+                "occasion": "",
+                "identifier_type": "4",
+                "command_id": "TransactionStatusQuery",
+            },
+        },
+    }
 
 
 class ReversalRequest(BaseModel):
@@ -135,15 +243,207 @@ class ReversalRequest(BaseModel):
     receiver_identifier_type: str = "11"
     command_id: str = "TransactionReversal"
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "transaction_id": "OEI2AK4Q16",
+                "amount": 10,
+                "remarks": "Reverse duplicate payment",
+                "occasion": "",
+                "receiver_party": "600000",
+                "receiver_identifier_type": "11",
+                "command_id": "TransactionReversal",
+            },
+        },
+    }
+
 
 class AccountBalanceRequest(BaseModel):
     remarks: str = "Account balance query"
     identifier_type: str = "4"
     command_id: str = "AccountBalance"
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "remarks": "Account balance query",
+                "identifier_type": "4",
+                "command_id": "AccountBalance",
+            },
+        },
+    }
+
 
 class RatibaRequest(BaseModel):
     payload: dict[str, Any]
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "payload": {
+                    "StandingOrderName": "Rent Collection",
+                    "StartDate": "20260827090000",
+                    "Frequency": "Monthly",
+                    "Amount": "1000",
+                    "CallBackURL": "https://example.com/callbacks/payments/ratiba",
+                },
+            },
+        },
+    }
+
+
+class DynamicQrCodeGenerateRequest(BaseModel):
+    MerchantName: str
+    RefNo: str
+    Amount: str
+    TrxCode: str
+    CPI: str
+    Size: str
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "MerchantName": "Demo Store",
+                "RefNo": "INV1001",
+                "Amount": "10",
+                "TrxCode": "BG",
+                "CPI": "174379",
+                "Size": "300",
+            },
+        },
+    }
+
+
+class BillManagerCreateSingleInvoiceRequest(BaseModel):
+    externalReference: str
+    billedFullName: str
+    billedPhoneNumber: str
+    billedPeriod: str
+    invoiceName: str
+    dueDate: str
+    accountReference: str
+    amount: str
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "externalReference": "INV-1001",
+                "billedFullName": "Jane Doe",
+                "billedPhoneNumber": "254714415034",
+                "billedPeriod": "2026-08",
+                "invoiceName": "Utility Bill",
+                "dueDate": "2026-08-31",
+                "accountReference": "ACC-1001",
+                "amount": "1500",
+            },
+        },
+    }
+
+
+class BillManagerCreateBulkInvoicesRequest(BaseModel):
+    invoices: list[dict[str, Any]]
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "invoices": [
+                    {
+                        "externalReference": "INV-1001",
+                        "billedFullName": "Jane Doe",
+                        "billedPhoneNumber": "254714415034",
+                        "billedPeriod": "2026-08",
+                        "invoiceName": "Utility Bill",
+                        "dueDate": "2026-08-31",
+                        "accountReference": "ACC-1001",
+                        "amount": "1500",
+                    },
+                ],
+            },
+        },
+    }
+
+
+class BillManagerCancelInvoiceRequest(BaseModel):
+    externalReference: str
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "externalReference": "INV-1001",
+            },
+        },
+    }
+
+
+class PullTransactionsQueryRequest(BaseModel):
+    ShortCode: str = Field(
+        description="Business shortcode configured for Pull Transactions.",
+    )
+    StartDate: str = Field(
+        description="Query start datetime in Safaricom format YYYY-MM-DD HH:MM:SS.",
+    )
+    EndDate: str = Field(
+        description="Query end datetime in Safaricom format YYYY-MM-DD HH:MM:SS.",
+    )
+    OffSetValue: str = Field(
+        default="0",
+        description="Pagination offset as a string, usually '0' for the first page.",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "ShortCode": "174379",
+                "StartDate": "2026-08-26 00:00:00",
+                "EndDate": "2026-08-26 23:59:59",
+                "OffSetValue": "0",
+            },
+        },
+    }
+
+    @field_validator("StartDate", "EndDate")
+    @classmethod
+    def validate_pull_transactions_datetime(cls, value: str) -> str:
+        try:
+            datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+        except ValueError as error:
+            raise ValueError(
+                "Pull Transactions dates must use format YYYY-MM-DD HH:MM:SS",
+            ) from error
+        return value
+
+
+class PullTransactionsRegisterRequest(BaseModel):
+    ShortCode: str | None = None
+    RequestType: str | None = None
+    NominatedNumber: str | None = None
+    CallBackURL: str | None = None
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {},
+            "examples": [
+                {
+                    "ShortCode": "174379",
+                    "RequestType": "Pull",
+                    "NominatedNumber": "254722000000",
+                    "CallBackURL": "https://example.com/callbacks/payments/pull-transactions",
+                },
+            ],
+        },
+    }
+
+
+class MobileNumberValidationCheckAtiRequest(BaseModel):
+    phoneNumber: str
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "phoneNumber": "254714415034",
+            },
+        },
+    }
 
 
 @router.get("/token")
@@ -346,6 +646,127 @@ def mpesa_ratiba(
     verify_internal_api_key(x_api_key)
     try:
         return create_ratiba_standing_order(payload.payload)
+    except Exception as error:
+        handle_mpesa_error(error)
+        raise
+
+
+@router.post("/dynamic-qrcode/generate")
+def mpesa_dynamic_qrcode_generate(
+    payload: DynamicQrCodeGenerateRequest,
+    x_api_key: str = Header(...),
+) -> dict[str, Any]:
+    verify_internal_api_key(x_api_key)
+    try:
+        return generate_dynamic_qrcode(payload.model_dump())
+    except Exception as error:
+        handle_mpesa_error(error)
+        raise
+
+
+@router.post("/bill-manager/invoices/create-single")
+def mpesa_bill_manager_create_single_invoice(
+    payload: BillManagerCreateSingleInvoiceRequest,
+    x_api_key: str = Header(...),
+) -> dict[str, Any]:
+    verify_internal_api_key(x_api_key)
+    try:
+        return create_bill_manager_single_invoice(payload.model_dump())
+    except Exception as error:
+        handle_mpesa_error(error)
+        raise
+
+
+@router.post("/bill-manager/invoices/create-bulk")
+def mpesa_bill_manager_create_bulk_invoices(
+    payload: BillManagerCreateBulkInvoicesRequest,
+    x_api_key: str = Header(...),
+) -> dict[str, Any]:
+    verify_internal_api_key(x_api_key)
+    try:
+        return create_bill_manager_bulk_invoices(payload.model_dump())
+    except Exception as error:
+        handle_mpesa_error(error)
+        raise
+
+
+@router.post("/bill-manager/invoices/cancel-single")
+def mpesa_bill_manager_cancel_single_invoice(
+    payload: BillManagerCancelInvoiceRequest,
+    x_api_key: str = Header(...),
+) -> dict[str, Any]:
+    verify_internal_api_key(x_api_key)
+    try:
+        return cancel_bill_manager_single_invoice(payload.model_dump())
+    except Exception as error:
+        handle_mpesa_error(error)
+        raise
+
+
+@router.post("/bill-manager/invoices/cancel-bulk")
+def mpesa_bill_manager_cancel_bulk_invoices(
+    payload: BillManagerCancelInvoiceRequest,
+    x_api_key: str = Header(...),
+) -> dict[str, Any]:
+    verify_internal_api_key(x_api_key)
+    try:
+        return cancel_bill_manager_bulk_invoices(payload.model_dump())
+    except Exception as error:
+        handle_mpesa_error(error)
+        raise
+
+
+@router.post("/pull-transactions/query")
+def mpesa_pull_transactions_query(
+    payload: PullTransactionsQueryRequest,
+    x_api_key: str = Header(...),
+) -> dict[str, Any]:
+    verify_internal_api_key(x_api_key)
+    try:
+        return query_pull_transactions(payload.model_dump())
+    except Exception as error:
+        handle_mpesa_error(error)
+        raise
+
+
+@router.post("/pull-transactions/register")
+def mpesa_pull_transactions_register(
+    payload: PullTransactionsRegisterRequest | None = Body(
+        default=None,
+        openapi_examples={
+            "env_defaults": {
+                "summary": "Use .env defaults",
+                "value": {},
+            },
+            "override_values": {
+                "summary": "Override registration fields",
+                "value": {
+                    "NominatedNumber": "254722000000",
+                    "CallBackURL": "https://example.com/callbacks/payments/pull-transactions",
+                },
+            },
+        },
+    ),
+    x_api_key: str = Header(...),
+) -> dict[str, Any]:
+    verify_internal_api_key(x_api_key)
+    try:
+        return register_pull_transactions_from_settings(
+            payload.model_dump(exclude_none=True) if payload else None,
+        )
+    except Exception as error:
+        handle_mpesa_error(error)
+        raise
+
+
+@router.post("/mobile-number-validation/check-ati")
+def mpesa_mobile_number_validation_check_ati(
+    payload: MobileNumberValidationCheckAtiRequest,
+    x_api_key: str = Header(...),
+) -> dict[str, Any]:
+    verify_internal_api_key(x_api_key)
+    try:
+        return check_ati_mobile_number(payload.model_dump())
     except Exception as error:
         handle_mpesa_error(error)
         raise

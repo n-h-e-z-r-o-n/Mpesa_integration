@@ -1,91 +1,221 @@
+import Image from "next/image";
 import Link from "next/link";
 
-import { CapabilitySection } from "@/components/public/capability-section";
-import { DeveloperPreview } from "@/components/public/developer-preview";
-import { EditorialGrid } from "@/components/public/editorial-grid";
-import { InfrastructureSection } from "@/components/public/infrastructure-section";
-import { PaymentVisualization } from "@/components/public/payment-visualization";
-import { PublicCta } from "@/components/public/public-cta";
 import { PublicSiteFrame } from "@/components/public/public-site-frame";
-import { SecuritySection } from "@/components/public/security-section";
 import { getAdminSession } from "@/lib/auth/admin-session";
+
+function BrandRing({ className = "h-24 w-24" }: { className?: string }) {
+  return (
+    <div
+      className={`relative rounded-full bg-[conic-gradient(from_210deg,_#8de1ff,_#2690ff,_#1e3a8a,_#8de1ff)] p-[10%] ${className}`}
+    >
+      <div className="h-full w-full rounded-full bg-white" />
+    </div>
+  );
+}
+
+function BlueprintRing() {
+  return (
+    <div className="relative h-full w-full overflow-hidden rounded-[2rem] border border-[#d7e0ee] bg-[#fbfcff]">
+      <div
+        className="absolute inset-6 opacity-65"
+        style={{
+          backgroundImage: `
+            linear-gradient(rgba(71, 85, 105, 0.14) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(71, 85, 105, 0.14) 1px, transparent 1px)
+          `,
+          backgroundSize: "18px 18px",
+        }}
+      />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="relative h-[70%] w-[70%]">
+          <div className="absolute inset-0 rounded-full border-[28px] border-slate-300/80" />
+          <div className="absolute inset-[18%] rounded-full border border-slate-300/80" />
+          <div className="absolute inset-[24%] rounded-full border border-slate-300/80" />
+          <div className="absolute inset-[30%] rounded-full border border-slate-300/80" />
+        </div>
+      </div>
+      <div className="absolute left-5 top-4 text-[10px] uppercase tracking-[0.18em] text-slate-400">
+        Brand Geometry
+      </div>
+    </div>
+  );
+}
+
+const quickLinks = ["Collections", "Disbursements", "Business wallets"];
 
 export default async function HomePage() {
   const session = await getAdminSession();
 
   return (
     <PublicSiteFrame>
-      <main>
-        <section className="overflow-hidden bg-[#071019] px-5 pb-18 pt-10 sm:px-8 lg:pb-24 lg:pt-16">
-          <div className="mx-auto max-w-[1480px]">
+      <main className="bg-[#1d255a]">
+        <section className="px-5 pb-10 pt-8 sm:px-8 lg:pb-16 lg:pt-10">
+          <div className="mx-auto max-w-[1540px]">
             {session ? (
-              <div className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-[1.8rem] border border-sky-300/15 bg-sky-400/8 px-5 py-4 text-sm text-slate-200">
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-[1.6rem] border border-white/12 bg-white/8 px-5 py-4 text-sm text-slate-100">
                 <div>
-                  Authenticated session detected for{" "}
-                  <span className="mono text-sky-200">{session.email}</span>.
+                  Signed in as <span className="mono text-sky-100">{session.email}</span>
                 </div>
                 <Link
                   href="/dashboard"
-                  className="rounded-full border border-sky-300/20 bg-sky-400/10 px-4 py-2 text-sm text-white transition hover:bg-sky-400/15"
+                  className="rounded-full bg-white px-4 py-2 text-sm font-medium text-[#162457] transition hover:bg-sky-50"
                 >
-                  Enter dashboard
+                  Open dashboard
                 </Link>
               </div>
             ) : null}
 
-            <div className="grid items-end gap-10 xl:grid-cols-[0.92fr_1.08fr]">
-              <div className="max-w-2xl">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-sky-300">
-                  Unified Payment Infrastructure
+            <section
+              id="products"
+              className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1.04fr_1.28fr_0.64fr] xl:grid-rows-[12rem_22rem_20rem]"
+            >
+              <article className="relative min-h-[32rem] overflow-hidden rounded-[2rem] border border-white/10 bg-[#0f6de6] xl:row-span-2 xl:min-h-0">
+                <Image
+                  src="/landing/travel-lifestyle.png"
+                  alt="Traveler using Zadhron payments on a phone"
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 1279px) 100vw, 34vw"
+                  priority
+                />
+                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(4,16,54,0.12)_0%,rgba(6,18,56,0.12)_55%,rgba(5,12,29,0.56)_100%)]" />
+                <div className="absolute left-7 right-7 top-7">
+                  <div className="text-sm text-sky-100/80">Built for</div>
+                  <h1 className="mt-1 text-5xl font-semibold tracking-[-0.08em] text-white sm:text-6xl">
+                    Modern Payments
+                  </h1>
                 </div>
-                <h1 className="mt-6 text-5xl font-semibold tracking-[-0.07em] text-white sm:text-6xl lg:text-7xl">
-                  Payments infrastructure built for how Africa moves money.
-                </h1>
-                <p className="mt-7 max-w-xl text-base leading-8 text-slate-300 sm:text-lg">
-                  Zadhron Payments helps applications and businesses collect, send, verify, and
-                  monitor payments through a unified API and a shared operational control plane.
-                </p>
+                <div className="absolute bottom-6 left-7 right-7 flex items-end justify-between gap-4">
+                  <div>
+                    <div className="text-3xl font-semibold tracking-[-0.06em] text-white">
+                      Zadhron
+                    </div>
+                    <div className="mt-1 text-xs uppercase tracking-[0.18em] text-white/70">
+                      Reliable M-Pesa infrastructure
+                    </div>
+                  </div>
+                  <div className="hidden text-xs text-white/70 sm:block">Move money with confidence.</div>
+                </div>
+              </article>
 
-                <div className="mt-9 flex flex-wrap gap-3">
+              <article className="relative flex min-h-[14rem] items-center overflow-hidden rounded-[2rem] border border-white/10 bg-[#fbfbfd] px-7 py-8 text-[#18295d] md:col-span-2 xl:col-span-1 xl:min-h-0">
+                <div className="absolute inset-y-0 right-0 w-44 bg-gradient-to-l from-sky-100/80 to-transparent" />
+                <div className="relative flex items-center gap-5 sm:gap-7">
+                  <BrandRing className="h-20 w-20 sm:h-24 sm:w-24" />
+                  <div>
+                    <div className="text-4xl font-semibold tracking-[-0.08em] sm:text-6xl">
+                      zadhron
+                    </div>
+                    <div className="mt-2 text-sm uppercase tracking-[0.24em] text-sky-700">
+                      pay
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article className="relative min-h-[18rem] overflow-hidden rounded-[2rem] border border-white/10 bg-[#dbe7f7] xl:min-h-0">
+                <Image
+                  src="/landing/cap-portrait.png"
+                  alt="Fashion portrait with Zadhron branded cap"
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 1279px) 50vw, 16vw"
+                />
+              </article>
+
+              <article className="relative min-h-[18rem] overflow-hidden rounded-[2rem] border border-white/10 bg-[#dceeff] xl:min-h-0">
+                <Image
+                  src="/landing/card-closeup.png"
+                  alt="Close-up of a payment card held in hand"
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 1279px) 50vw, 42vw"
+                />
+              </article>
+
+              <article className="relative min-h-[30rem] overflow-hidden rounded-[2rem] border border-white/10 bg-white xl:row-span-2 xl:min-h-0">
+                <Image
+                  src="/landing/phone-portrait.png"
+                  alt="Portrait holding a phone in Zadhron campaign styling"
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 1279px) 50vw, 26vw"
+                />
+                <div className="absolute left-7 top-7 max-w-[12rem] text-[#162457]">
+                  <div className="text-3xl font-medium leading-[1.02] tracking-[-0.06em]">
+                    Payments made simple for growing businesses.
+                  </div>
+                </div>
+              </article>
+
+              <article className="relative min-h-[16rem] overflow-hidden rounded-[2rem] border border-white/10 bg-[#122a72] md:col-span-1 xl:min-h-0">
+                <Image
+                  src="/landing/pocket-phone.png"
+                  alt="Phone in pocket with abstract Zadhron payment wallpaper"
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 1279px) 50vw, 34vw"
+                />
+                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,18,56,0.08)_0%,rgba(5,12,29,0.52)_100%)]" />
+                <div className="absolute bottom-6 left-7 max-w-[14rem]">
+                  <div className="text-3xl font-medium leading-[1.02] tracking-[-0.06em] text-white">
+                    Checkout that feels instant.
+                  </div>
+                </div>
+              </article>
+
+              <article className="min-h-[16rem] xl:min-h-0">
+                <BlueprintRing />
+              </article>
+            </section>
+
+            <section
+              id="developers"
+              className="mt-8 rounded-[2rem] border border-white/10 bg-white/[0.04] px-6 py-6 sm:px-7"
+            >
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                <div className="max-w-2xl">
+                  <div className="text-[11px] uppercase tracking-[0.2em] text-sky-200">
+                    Zadhron Pay
+                  </div>
+                  <h2 className="mt-3 text-3xl font-semibold tracking-[-0.06em] text-white sm:text-4xl">
+                    A refined payment gateway for collection, payout, and business money movement.
+                  </h2>
+                </div>
+                <div className="flex flex-wrap gap-3">
                   <Link
                     href="/signup"
-                    className="rounded-full bg-[#eef4ff] px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-white"
+                    className="rounded-full bg-white px-5 py-3 text-sm font-medium text-[#162457] transition hover:bg-sky-50"
                   >
-                    Start building
+                    Get started
                   </Link>
                   <Link
                     href="/docs"
-                    className="rounded-full border border-white/15 px-5 py-3 text-sm text-slate-100 transition hover:border-white/30 hover:bg-white/5"
+                    className="rounded-full border border-white/15 px-5 py-3 text-sm text-white transition hover:border-white/30 hover:bg-white/5"
                   >
-                    View documentation
+                    View docs
                   </Link>
-                </div>
-
-                <div className="mt-12 grid gap-4 sm:grid-cols-3">
-                  {[
-                    ["Collect", "STK and callback-aware collection flows"],
-                    ["Send", "Controlled payout and disbursement operations"],
-                    ["Observe", "Request IDs, logs, callbacks, and health signals"],
-                  ].map(([title, body]) => (
-                    <div key={title} className="rounded-[1.6rem] border border-white/10 bg-white/[0.03] p-4">
-                      <div className="text-sm font-medium text-white">{title}</div>
-                      <div className="mt-2 text-sm leading-7 text-slate-400">{body}</div>
-                    </div>
-                  ))}
                 </div>
               </div>
 
-              <PaymentVisualization />
-            </div>
+              <div id="solutions" className="mt-6 flex flex-wrap gap-3">
+                {quickLinks.map((item) => (
+                  <div
+                    key={item}
+                    className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm text-slate-100"
+                  >
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section id="pricing" className="pb-2 pt-6 text-center text-sm text-slate-300">
+              Designed to make every payment touchpoint feel clear, fast, and trustworthy.
+            </section>
           </div>
         </section>
-
-        <EditorialGrid />
-        <CapabilitySection />
-        <DeveloperPreview />
-        <InfrastructureSection />
-        <SecuritySection />
-        <PublicCta />
       </main>
     </PublicSiteFrame>
   );

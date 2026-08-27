@@ -51,6 +51,21 @@ export function sanitizeAlphaNumeric(value: string, maxLength: number) {
   return value.replace(/[^a-zA-Z0-9]/g, "").slice(0, maxLength);
 }
 
+export function resolveMpesaPath(defaultPath: string, pathOverride?: string) {
+  const path = (pathOverride ?? defaultPath).trim();
+  if (!path) {
+    throw new GatewayValidationError("M-Pesa product path is not configured");
+  }
+  if (!path.startsWith("/")) {
+    throw new GatewayValidationError("pathOverride must start with '/'");
+  }
+  if (path.startsWith("//") || path.includes("://")) {
+    throw new GatewayValidationError("pathOverride must be a relative M-Pesa path");
+  }
+
+  return path;
+}
+
 export function ensureC2BCallbackUrlAllowed(url: string) {
   if (/mpesa/i.test(url)) {
     throw new GatewayValidationError(

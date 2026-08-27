@@ -35,6 +35,10 @@ export interface GatewayConfig {
   b2cPath: string;
   businessToPochiPath: string;
   b2bPath: string;
+  dynamicQrCodePath: string;
+  billManagerPath: string;
+  pullTransactionsPath: string;
+  mobileNumberValidationPath: string;
   transactionStatusPath: string;
   reversalPath: string;
   accountBalancePath: string;

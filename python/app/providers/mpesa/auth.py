@@ -78,6 +78,7 @@ def fetch_access_token() -> str:
         time.monotonic() + expires_in - TOKEN_REFRESH_MARGIN_SECONDS
     )
 
+    """
     print("OAuth URL:", url)
     print("OAuth status:", response.status_code)
     print("OAuth response keys:", list(data.keys()))
@@ -85,6 +86,7 @@ def fetch_access_token() -> str:
     print("Expires in:", expires_in)
     print("Token prefix:", access_token[:8])
     print("Token suffix:", access_token[-4:])
+    """
 
     return access_token
 

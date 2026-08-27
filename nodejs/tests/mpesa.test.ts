@@ -179,4 +179,42 @@ describe("M-Pesa gateway", () => {
     expect(normalized.error?.providerCode).toBe("401.002.01");
     expect(normalized.error?.providerMessage).toBe("Invalid Access Token");
   });
+
+  test("allows path overrides for pass-through Daraja products", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "token-2", expires_in: 3600 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ResponseCode: "0", ResponseDescription: "OK" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { executeMpesaOperation } = await import("@/services/mpesa/service");
+    await executeMpesaOperation(
+      "pullTransactions",
+      {
+        pathOverride: "/pulltransactions/v1/register",
+        payload: { ShortCode: "174379" },
+      },
+      {
+        requestId: "req-3",
+        applicationId: "admin-console",
+        route: "/api/mpesa/pull-transactions",
+        method: "POST",
+        startedAt: Date.now(),
+      },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("https://sandbox.safaricom.co.ke/pulltransactions/v1/register");
+  });
 });
