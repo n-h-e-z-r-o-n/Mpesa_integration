@@ -20,6 +20,7 @@ import {
   sanitizeAlphaNumeric,
 } from "@/lib/mpesa/utils";
 import { logEvent, sanitizeForLogs } from "@/lib/logger";
+import { persistCallbackRecord } from "@/lib/repositories/callback-store";
 import {
   addCallback,
   addRequestLog,
@@ -610,7 +611,7 @@ function statusFromCallback(callbackName: CallbackName, payload: Record<string, 
   return "failed";
 }
 
-export function processMpesaCallback(
+export async function processMpesaCallback(
   callbackName: CallbackName,
   payload: Record<string, unknown>,
   sourceIp?: string,
@@ -628,6 +629,7 @@ export function processMpesaCallback(
     payload: sanitizeForLogs(payload),
   };
 
+  await persistCallbackRecord(callbackRecord);
   addCallback(callbackRecord);
 
   const transaction = findTransactionForCallback(innerPayload);

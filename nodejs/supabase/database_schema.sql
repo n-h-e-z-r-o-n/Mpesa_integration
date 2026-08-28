@@ -407,6 +407,8 @@ CREATE TABLE public.provider_events (
 
     payload_hash TEXT,
 
+    source_ip INET,
+
     processing_status TEXT NOT NULL DEFAULT 'pending'
         CHECK (
             processing_status IN (
@@ -707,9 +709,172 @@ AS $$
 $$;
 
 
+-- ============================================================
+-- DASHBOARD RESOLUTION
+-- ============================================================
+--
+-- Centralizes post-login routing decisions in the database.
+--
+-- Current product rule:
+-- - admin users go to the admin dashboard
+-- - normal users with a merchant account go to the merchant dashboard
+-- - normal users without a merchant account go to onboarding
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.resolve_dashboard_type()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT CASE
+        WHEN public.is_admin() THEN 'admin'
+        WHEN public.current_merchant_id() IS NOT NULL THEN 'merchant'
+        ELSE 'onboarding'
+    END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION public.resolve_dashboard_route()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT CASE public.resolve_dashboard_type()
+        WHEN 'admin' THEN '/admin/dashboard'
+        WHEN 'merchant' THEN '/app/dashboard'
+        ELSE '/signup'
+    END;
+$$;
+
+
+-- ============================================================
+-- REGISTRATION RPC
+-- ============================================================
+--
+-- Supabase Auth should create the authenticated identity first
+-- via supabase.auth.signUp(...).
+--
+-- This RPC then completes application registration by:
+-- - updating the current user's profile
+-- - creating or updating the user's single merchant account
+-- - returning the post-registration dashboard target
+--
+-- Current product rule:
+-- - public registration creates normal merchant users
+-- - admin privileges are NOT self-assigned here
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.register_new_user(
+    p_full_name TEXT,
+    p_phone TEXT DEFAULT NULL,
+    p_business_name TEXT DEFAULT NULL,
+    p_business_email TEXT DEFAULT NULL,
+    p_business_phone TEXT DEFAULT NULL,
+    p_default_currency TEXT DEFAULT 'KES'
+)
+RETURNS TABLE (
+    user_id UUID,
+    merchant_id UUID,
+    dashboard_type TEXT,
+    dashboard_route TEXT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_user_id UUID;
+    v_merchant_id UUID;
+    v_business_name TEXT;
+    v_business_email TEXT;
+    v_business_phone TEXT;
+    v_phone TEXT;
+    v_full_name TEXT;
+    v_default_currency TEXT;
+BEGIN
+    v_user_id := public.current_user_id();
+
+    IF v_user_id IS NULL THEN
+        RAISE EXCEPTION 'Authentication required';
+    END IF;
+
+    v_full_name := NULLIF(trim(p_full_name), '');
+    v_phone := NULLIF(trim(p_phone), '');
+    v_business_name := NULLIF(trim(p_business_name), '');
+    v_business_email := NULLIF(trim(p_business_email), '');
+    v_business_phone := NULLIF(trim(p_business_phone), '');
+    v_default_currency := upper(trim(COALESCE(p_default_currency, 'KES')));
+
+    IF v_default_currency !~ '^[A-Z]{3}$' THEN
+        RAISE EXCEPTION 'default_currency must be a 3-letter ISO currency code';
+    END IF;
+
+    UPDATE public.users
+    SET
+        full_name = COALESCE(v_full_name, full_name),
+        phone = COALESCE(v_phone, phone),
+        updated_at = now()
+    WHERE id = v_user_id;
+
+    SELECT id
+    INTO v_merchant_id
+    FROM public.merchant_accounts
+    WHERE owner_user_id = v_user_id
+    LIMIT 1;
+
+    IF v_merchant_id IS NULL THEN
+        IF v_business_name IS NULL THEN
+            RAISE EXCEPTION 'business_name is required';
+        END IF;
+
+        INSERT INTO public.merchant_accounts (
+            owner_user_id,
+            business_name,
+            business_email,
+            business_phone,
+            default_currency,
+            status
+        )
+        VALUES (
+            v_user_id,
+            v_business_name,
+            v_business_email,
+            v_business_phone,
+            v_default_currency,
+            'pending'
+        )
+        RETURNING id INTO v_merchant_id;
+    ELSE
+        UPDATE public.merchant_accounts
+        SET
+            business_name = COALESCE(v_business_name, business_name),
+            business_email = COALESCE(v_business_email, business_email),
+            business_phone = COALESCE(v_business_phone, business_phone),
+            default_currency = COALESCE(v_default_currency, default_currency),
+            updated_at = now()
+        WHERE id = v_merchant_id;
+    END IF;
+
+    RETURN QUERY
+    SELECT
+        v_user_id,
+        v_merchant_id,
+        public.resolve_dashboard_type(),
+        public.resolve_dashboard_route();
+END;
+$$;
+
+
 REVOKE ALL ON FUNCTION public.current_user_id() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.is_admin() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.current_merchant_id() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.resolve_dashboard_type() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.resolve_dashboard_route() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.register_new_user(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.current_user_id()
 TO authenticated;
@@ -718,6 +883,15 @@ GRANT EXECUTE ON FUNCTION public.is_admin()
 TO authenticated;
 
 GRANT EXECUTE ON FUNCTION public.current_merchant_id()
+TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.resolve_dashboard_type()
+TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.resolve_dashboard_route()
+TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.register_new_user(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT)
 TO authenticated;
 
 

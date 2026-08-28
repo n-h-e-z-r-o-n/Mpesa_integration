@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAdminSession } from "@/lib/auth/admin-session";
 import { getGatewayConfig } from "@/lib/mpesa/config";
+import { hasSupabaseAdminAccess } from "@/lib/repositories/callback-store";
 
 export const runtime = "nodejs";
 
@@ -25,5 +26,9 @@ export async function GET() {
     hasSecurityCredential: Boolean(config.securityCredential),
     hasCertificatePath: Boolean(config.certificatePath),
     callbackAllowedIps: config.callbackAllowedIps,
+    callbackPersistence: {
+      provider: "supabase",
+      enabled: hasSupabaseAdminAccess(),
+    },
   });
 }

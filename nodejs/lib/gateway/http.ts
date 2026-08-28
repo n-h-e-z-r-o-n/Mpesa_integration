@@ -224,7 +224,7 @@ export async function handleMpesaCallback(request: NextRequest, callbackName: Ca
       payload = { rawBody: text };
     }
 
-    const response = processMpesaCallback(callbackName, payload, getClientIp(request));
+    const response = await processMpesaCallback(callbackName, payload, getClientIp(request));
     return responseWithRequestId(response, 200, requestId);
   } catch (error) {
     const normalized = normalizeError(

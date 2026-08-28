@@ -2,14 +2,32 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { startTransition, useState } from "react";
+import { startTransition, useMemo, useState } from "react";
+
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser-client";
 
 type Props = {
+  dashboardRoute?: string | null;
   signedInEmail?: string | null;
+  supabasePublishableKey: string;
+  supabaseUrl: string;
 };
 
-export function LoginForm({ signedInEmail }: Props) {
+type LoginRouteResult = {
+  dashboard_route?: string | null;
+};
+
+export function LoginForm({
+  dashboardRoute,
+  signedInEmail,
+  supabasePublishableKey,
+  supabaseUrl,
+}: Props) {
   const router = useRouter();
+  const supabase = useMemo(
+    () => getSupabaseBrowserClient(supabaseUrl, supabasePublishableKey),
+    [supabasePublishableKey, supabaseUrl],
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -23,23 +41,32 @@ export function LoginForm({ signedInEmail }: Props) {
         setPending(true);
         setError(null);
 
-        const response = await fetch("/api/admin/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
+        const { error: loginError } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
         });
 
-        if (!response.ok) {
-          const payload = (await response.json().catch(() => null)) as
-            | { error?: { message?: string } }
-            | null;
+        if (loginError) {
           setPending(false);
-          setError(payload?.error?.message ?? "Invalid credentials.");
+          setError(loginError.message || "Invalid credentials.");
           return;
         }
 
+        const { data: routeData, error: routeError } = await supabase.rpc("resolve_dashboard_route");
+
+        if (routeError) {
+          setPending(false);
+          setError(routeError.message || "Unable to resolve your dashboard.");
+          return;
+        }
+
+        const nextRoute =
+          ((routeData as LoginRouteResult | null)?.dashboard_route as string | undefined) ||
+          (typeof routeData === "string" ? routeData : null) ||
+          "/app/dashboard";
+
         startTransition(() => {
-          router.push("/dashboard");
+          router.push(nextRoute);
           router.refresh();
         });
       }}
@@ -52,7 +79,7 @@ export function LoginForm({ signedInEmail }: Props) {
             Continue to your workspace or sign in again with a different account.
           </p>
           <Link
-            href="/dashboard"
+            href={dashboardRoute ?? "/app/dashboard"}
             className="mt-4 inline-flex rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-900 transition hover:bg-white"
           >
             Continue to dashboard
@@ -67,7 +94,7 @@ export function LoginForm({ signedInEmail }: Props) {
         Sign in
       </h1>
       <p className="mt-3 text-sm leading-7 text-slate-600">
-        Sign in to manage payments, disbursements, and account activity.
+        Sign in with your Supabase account to access either the merchant workspace or the admin console.
       </p>
 
       <label className="mt-8 block text-sm text-slate-800">
@@ -103,6 +130,12 @@ export function LoginForm({ signedInEmail }: Props) {
       >
         {pending ? "Signing in..." : "Sign in"}
       </button>
+
+      <p className="mt-4 text-center text-sm text-slate-600">
+        <Link href="/reset-password" className="text-slate-950 underline decoration-slate-400 underline-offset-4">
+          Forgot your password?
+        </Link>
+      </p>
 
       <div className="mt-5 flex flex-wrap gap-2">
         {["Secure access", "Encrypted session", "Business payments"].map((item) => (

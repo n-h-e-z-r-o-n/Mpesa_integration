@@ -1,18 +1,14 @@
 import { AuthShell } from "@/components/public/auth-shell";
 import { LoginBrandPanel } from "@/components/public/login-brand-panel";
-import { LoginForm } from "@/components/forms/login-form";
-import { getAuthenticatedAppUser } from "@/lib/auth/app-session";
+import { ResetPasswordForm } from "@/components/forms/reset-password-form";
 
-export default async function LoginPage() {
-  const session = await getAuthenticatedAppUser();
+export default function ResetPasswordPage() {
   const supabaseUrl = process.env.SUPABASE_URL ?? "";
   const supabasePublishableKey = process.env.SUPABASE_PUBLISHABLE_KEY ?? "";
 
   return (
     <AuthShell visual={<LoginBrandPanel />}>
-      <LoginForm
-        signedInEmail={session?.email ?? null}
-        dashboardRoute={session?.dashboardRoute ?? null}
+      <ResetPasswordForm
         supabaseUrl={supabaseUrl}
         supabasePublishableKey={supabasePublishableKey}
       />

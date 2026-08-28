@@ -1,5 +1,27 @@
 import type { NextConfig } from "next";
 
+function getSupabaseOrigin() {
+  const rawUrl = process.env.SUPABASE_URL;
+
+  if (!rawUrl) {
+    return null;
+  }
+
+  try {
+    return new URL(rawUrl).origin;
+  } catch {
+    return null;
+  }
+}
+
+const supabaseOrigin = getSupabaseOrigin();
+const connectSrc = [
+  "'self'",
+  "https://sandbox.safaricom.co.ke",
+  "https://api.safaricom.co.ke",
+  supabaseOrigin,
+].filter(Boolean);
+
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
@@ -16,7 +38,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "font-src 'self' data:",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "connect-src 'self' https://sandbox.safaricom.co.ke https://api.safaricom.co.ke",
+      `connect-src ${connectSrc.join(" ")}`,
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",

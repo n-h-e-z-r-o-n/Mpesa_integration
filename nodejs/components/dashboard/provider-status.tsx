@@ -8,7 +8,7 @@ type Props = {
 
 export function ProviderStatus({ environment, providerHealth, oauthHealthy }: Props) {
   return (
-    <section className="panel rounded-sm p-5">
+    <section className="panel rounded-[1.5rem] p-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-white">Provider Status</h2>
@@ -20,13 +20,13 @@ export function ProviderStatus({ environment, providerHealth, oauthHealthy }: Pr
       </div>
 
       <dl className="mt-5 grid gap-4 md:grid-cols-2">
-        <div className="panel-muted rounded-sm p-4">
+        <div className="panel-muted rounded-[1.2rem] p-4">
           <dt className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
             M-Pesa Environment
           </dt>
           <dd className="mt-2 text-base font-medium text-white">{environment}</dd>
         </div>
-        <div className="panel-muted rounded-sm p-4">
+        <div className="panel-muted rounded-[1.2rem] p-4">
           <dt className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)]">
             OAuth Probe
           </dt>

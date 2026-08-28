@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { adminCookie } from "@/lib/auth/admin-session";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 export async function POST() {
+  const supabase = await createSupabaseServerClient();
+  await supabase.auth.signOut();
   const response = NextResponse.json({ success: true });
-  response.cookies.set(adminCookie.name, "", { ...adminCookie.options, maxAge: 0 });
   return response;
 }

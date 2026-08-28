@@ -1,16 +1,17 @@
 import { EmptyState } from "@/components/ui/empty-state";
 import { JsonViewer } from "@/components/ui/json-viewer";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { listStoredCallbacks } from "@/lib/repositories/callback-store";
 import { getCallbacks } from "@/lib/repositories/runtime-store";
 
-export default function WebhooksPage() {
-  const callbacks = getCallbacks();
+export default async function WebhooksPage() {
+  const callbacks = (await listStoredCallbacks().catch(() => null)) ?? getCallbacks();
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-white">Webhooks</h1>
         <p className="mt-2 text-sm text-[var(--text-muted)]">
-          Incoming callback deliveries from Safaricom, with sanitized payloads.
+          Incoming callback deliveries from Safaricom, with sanitized payloads and persisted event records when Supabase admin access is configured.
         </p>
       </div>
 

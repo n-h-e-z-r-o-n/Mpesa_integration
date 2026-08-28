@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { HeroImageRotator } from "@/components/public/hero-image-rotator";
 import { PublicSiteFrame } from "@/components/public/public-site-frame";
-import { getAdminSession } from "@/lib/auth/admin-session";
+import { getAuthenticatedAppUser } from "@/lib/auth/app-session";
 
 function BrandRing({ className = "h-24 w-24" }: { className?: string }) {
   return (
@@ -58,7 +58,7 @@ async function getHeroImages() {
 }
 
 export default async function HomePage() {
-  const session = await getAdminSession();
+  const session = await getAuthenticatedAppUser();
   const heroImages = await getHeroImages();
 
   return (
@@ -68,11 +68,11 @@ export default async function HomePage() {
           <div className="mx-auto max-w-[1540px]">
             {session ? (
               <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-[1.6rem] border border-white/12 bg-white/8 px-5 py-4 text-sm text-slate-100">
-                <div>
+                    <div>
                   Signed in as <span className="mono text-sky-100">{session.email}</span>
                 </div>
                 <Link
-                  href="/dashboard"
+                  href={session.dashboardRoute}
                   className="rounded-full bg-white px-4 py-2 text-sm font-medium text-[#162457] transition hover:bg-sky-50"
                 >
                   Open dashboard
