@@ -1,6 +1,9 @@
+import { readdir } from "node:fs/promises";
+import path from "node:path";
 import Image from "next/image";
 import Link from "next/link";
 
+import { HeroImageRotator } from "@/components/public/hero-image-rotator";
 import { PublicSiteFrame } from "@/components/public/public-site-frame";
 import { getAdminSession } from "@/lib/auth/admin-session";
 
@@ -17,16 +20,7 @@ function BrandRing({ className = "h-24 w-24" }: { className?: string }) {
 function BlueprintRing() {
   return (
     <div className="relative h-full w-full overflow-hidden rounded-[2rem] border border-[#d7e0ee] bg-[#fbfcff]">
-      <div
-        className="absolute inset-6 opacity-65"
-        style={{
-          backgroundImage: `
-            linear-gradient(rgba(71, 85, 105, 0.14) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(71, 85, 105, 0.14) 1px, transparent 1px)
-          `,
-          backgroundSize: "18px 18px",
-        }}
-      />
+      <div className="blueprint-grid absolute inset-6 opacity-65" />
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="relative h-[70%] w-[70%]">
           <div className="absolute inset-0 rounded-full border-[28px] border-slate-300/80" />
@@ -44,8 +38,28 @@ function BlueprintRing() {
 
 const quickLinks = ["Collections", "Disbursements", "Business wallets"];
 
+async function getHeroImages() {
+  const heroFolder = path.join(process.cwd(), "public", "landing", "img1");
+  const fallback = ["/landing/travel-lifestyle.png"];
+
+  try {
+    const entries = await readdir(heroFolder, { withFileTypes: true });
+
+    const images = entries
+      .filter((entry) => entry.isFile() && /\.(avif|gif|jpe?g|png|webp)$/i.test(entry.name))
+      .map((entry) => entry.name)
+      .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+      .map((fileName) => `/landing/img1/${fileName}`);
+
+    return images.length > 0 ? images : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default async function HomePage() {
   const session = await getAdminSession();
+  const heroImages = await getHeroImages();
 
   return (
     <PublicSiteFrame>
@@ -71,19 +85,16 @@ export default async function HomePage() {
               className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1.04fr_1.28fr_0.64fr] xl:grid-rows-[12rem_22rem_20rem]"
             >
               <article className="relative min-h-[32rem] overflow-hidden rounded-[2rem] border border-white/10 bg-[#0f6de6] xl:row-span-2 xl:min-h-0">
-                <Image
-                  src="/landing/travel-lifestyle.png"
+                <HeroImageRotator
+                  images={heroImages}
                   alt="Traveler using Zadhron payments on a phone"
-                  fill
-                  className="object-cover"
                   sizes="(max-width: 1279px) 100vw, 34vw"
-                  priority
                 />
                 <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(4,16,54,0.12)_0%,rgba(6,18,56,0.12)_55%,rgba(5,12,29,0.56)_100%)]" />
                 <div className="absolute left-7 right-7 top-7">
                   <div className="text-sm text-sky-100/80">Built for</div>
-                  <h1 className="mt-1 text-5xl font-semibold tracking-[-0.08em] text-white sm:text-6xl">
-                    Modern Payments
+                  <h1 className="mt-1 text-5xl font-semibold tracking-[-0.04em] text-white sm:text-6xl">
+                    Payments
                   </h1>
                 </div>
                 <div className="absolute bottom-6 left-7 right-7 flex items-end justify-between gap-4">
@@ -121,6 +132,7 @@ export default async function HomePage() {
                   fill
                   className="object-cover"
                   sizes="(max-width: 1279px) 50vw, 16vw"
+                  suppressHydrationWarning
                 />
               </article>
 
@@ -131,6 +143,7 @@ export default async function HomePage() {
                   fill
                   className="object-cover"
                   sizes="(max-width: 1279px) 50vw, 42vw"
+                  suppressHydrationWarning
                 />
               </article>
 
@@ -141,6 +154,7 @@ export default async function HomePage() {
                   fill
                   className="object-cover"
                   sizes="(max-width: 1279px) 50vw, 26vw"
+                  suppressHydrationWarning
                 />
                 <div className="absolute left-7 top-7 max-w-[12rem] text-[#162457]">
                   <div className="text-3xl font-medium leading-[1.02] tracking-[-0.06em]">
@@ -156,6 +170,7 @@ export default async function HomePage() {
                   fill
                   className="object-cover"
                   sizes="(max-width: 1279px) 50vw, 34vw"
+                  suppressHydrationWarning
                 />
                 <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,18,56,0.08)_0%,rgba(5,12,29,0.52)_100%)]" />
                 <div className="absolute bottom-6 left-7 max-w-[14rem]">

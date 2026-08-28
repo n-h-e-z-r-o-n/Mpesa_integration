@@ -72,6 +72,26 @@ select {
   font-family: var(--font-mono), monospace;
 }
 
+.hero-image-rotator {
+  isolation: isolate;
+}
+
+.hero-image-layer {
+  opacity: 0;
+  transition: opacity 700ms ease-out;
+}
+
+.hero-image-layer.is-active {
+  opacity: 1;
+}
+
+.blueprint-grid {
+  background-image:
+    linear-gradient(rgba(71, 85, 105, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(71, 85, 105, 0.14) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
 .thin-scrollbar::-webkit-scrollbar {
   width: 10px;
   height: 10px;
