@@ -723,15 +723,34 @@ How this endpoint works:
 Primary endpoints:
 
 ```text
+POST /api/v1/mpesa/bill-manager/optin
+POST /api/v1/mpesa/bill-manager/change-optin-details
 POST /api/v1/mpesa/bill-manager/invoices/create-single
 POST /api/v1/mpesa/bill-manager/invoices/create-bulk
 POST /api/v1/mpesa/bill-manager/invoices/cancel-single
 POST /api/v1/mpesa/bill-manager/invoices/cancel-bulk
+POST /api/v1/mpesa/bill-manager/reconciliation
 ```
 
 Purpose:
 
 - forwards approved Bill Manager invoice operations through dedicated local routes
+- supports Bill Manager opt-in lifecycle and reconciliation routes
+
+Opt-in request:
+
+```json
+{}
+```
+
+Opt-in uses environment defaults for:
+
+- `shortcode`
+- `email`
+- `officialContact`
+- `sendReminders`
+- `logo`
+- `callbackurl`
 
 Example request body for bulk cancel:
 
@@ -741,12 +760,25 @@ Example request body for bulk cancel:
 }
 ```
 
+Example request body for reconciliation:
+
+```json
+{
+  "transactionId": "QX12345678",
+  "accountReference": "INV-1001"
+}
+```
+
 How this endpoint works:
 
+- `optin` uses `MPESA_BILL_MANAGER_OPTIN_PATH`
+- `change-optin-details` uses `MPESA_BILL_MANAGER_CHANGE_OPTIN_DETAILS_PATH`
 - `create-single` uses `MPESA_BILL_MANAGER_CREATE_SINGLE_INVOICE_PATH`
 - `create-bulk` uses `MPESA_BILL_MANAGER_CREATE_BULK_INVOICES_PATH`
 - `cancel-single` uses `MPESA_BILL_MANAGER_CANCEL_SINGLE_INVOICE_PATH`
 - `cancel-bulk` uses `MPESA_BILL_MANAGER_CANCEL_BULK_INVOICES_PATH`
+- `reconciliation` uses `MPESA_BILL_MANAGER_RECONCILIATION_PATH`
+- `optin` and `change-optin-details` auto-fill contact fields from `.env` unless you override them in the request body
 
 ## 14. Pull Transactions
 
@@ -1026,6 +1058,18 @@ Purpose:
 
 - receives Pull Transactions callback JSON from Safaricom
 
+### Bill Manager Callback
+
+Endpoint:
+
+```text
+POST /callbacks/payments/bill-manager
+```
+
+Purpose:
+
+- receives Bill Manager callback JSON from Safaricom
+
 ## Where Callback JSON Is Saved
 
 The latest callback payloads are saved locally in:
@@ -1036,6 +1080,7 @@ Examples:
 
 - `stk_latest.json`
 - `b2c_result_latest.json`
+- `bill_manager_latest.json`
 - `transaction_status_result_latest.json`
 - `pull_transactions_latest.json`
 
@@ -1055,12 +1100,15 @@ Use these endpoints in this order:
 10. `/api/v1/mpesa/account-balance`
 11. `/api/v1/mpesa/ratiba`
 12. `/api/v1/mpesa/dynamic-qrcode/generate`
-13. `/api/v1/mpesa/bill-manager/invoices/create-single`
-14. `/api/v1/mpesa/bill-manager/invoices/create-bulk`
-15. `/api/v1/mpesa/bill-manager/invoices/cancel-single`
-16. `/api/v1/mpesa/bill-manager/invoices/cancel-bulk`
-17. `/api/v1/mpesa/pull-transactions/query`
-18. `/api/v1/mpesa/pull-transactions/register`
-19. `/api/v1/mpesa/mobile-number-validation/check-ati`
+13. `/api/v1/mpesa/bill-manager/optin`
+14. `/api/v1/mpesa/bill-manager/change-optin-details`
+15. `/api/v1/mpesa/bill-manager/invoices/create-single`
+16. `/api/v1/mpesa/bill-manager/invoices/create-bulk`
+17. `/api/v1/mpesa/bill-manager/invoices/cancel-single`
+18. `/api/v1/mpesa/bill-manager/invoices/cancel-bulk`
+19. `/api/v1/mpesa/bill-manager/reconciliation`
+20. `/api/v1/mpesa/pull-transactions/query`
+21. `/api/v1/mpesa/pull-transactions/register`
+22. `/api/v1/mpesa/mobile-number-validation/check-ati`
 
 Use callback endpoints only for Safaricom callback delivery.

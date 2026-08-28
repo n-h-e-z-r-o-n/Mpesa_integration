@@ -115,3 +115,53 @@ def test_bill_manager_cancel_bulk_route(monkeypatch):
     assert response.status_code == 200
     assert response.json() == {"ok": True, "route": "cancel-bulk"}
     assert captured["payload"]["externalReference"] == "BILL-1001"
+
+
+def test_bill_manager_optin_route_can_use_env_defaults(monkeypatch):
+    captured = {}
+
+    def fake_bill_manager_optin_from_settings(payload=None):
+        captured["payload"] = payload
+        return {"ok": True, "route": "optin"}
+
+    monkeypatch.setattr(
+        mpesa_api,
+        "bill_manager_optin_from_settings",
+        fake_bill_manager_optin_from_settings,
+    )
+
+    response = client.post(
+        "/api/v1/mpesa/bill-manager/optin",
+        headers=HEADERS,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "route": "optin"}
+    assert captured["payload"] is None
+
+
+def test_bill_manager_reconciliation_route(monkeypatch):
+    captured = {}
+
+    def fake_reconcile_bill_manager(payload):
+        captured["payload"] = payload
+        return {"ok": True, "route": "reconciliation"}
+
+    monkeypatch.setattr(
+        mpesa_api,
+        "reconcile_bill_manager",
+        fake_reconcile_bill_manager,
+    )
+
+    response = client.post(
+        "/api/v1/mpesa/bill-manager/reconciliation",
+        headers=HEADERS,
+        json={
+            "transactionId": "QX12345678",
+            "accountReference": "INV-1001",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "route": "reconciliation"}
+    assert captured["payload"]["transactionId"] == "QX12345678"

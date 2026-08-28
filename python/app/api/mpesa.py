@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Body, Header, HTTPException, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.config import settings
 from app.providers.mpesa.account_balance import query_account_balance
@@ -12,10 +12,13 @@ from app.providers.mpesa.b2b import send_b2b_payment
 from app.providers.mpesa.b2c import send_b2c_payment
 from app.providers.mpesa.b2pochi_prod import send_b2pochi_payment
 from app.providers.mpesa.bill_manager import (
+    bill_manager_optin_from_settings,
     cancel_bill_manager_bulk_invoices,
     cancel_bill_manager_single_invoice,
+    change_bill_manager_optin_details_from_settings,
     create_bill_manager_bulk_invoices,
     create_bill_manager_single_invoice,
+    reconcile_bill_manager,
 )
 from app.providers.mpesa.c2b_register import register_c2b_urls
 from app.providers.mpesa.c2b_simulate import simulate_c2b_payment
@@ -446,6 +449,33 @@ class MobileNumberValidationCheckAtiRequest(BaseModel):
     }
 
 
+class BillManagerOptInRequest(BaseModel):
+    shortcode: str | None = None
+    email: str | None = None
+    officialContact: str | None = None
+    sendReminders: int | None = None
+    logo: str | None = None
+    callbackurl: str | None = None
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {},
+        },
+    }
+
+
+class BillManagerReconciliationRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+        json_schema_extra={
+            "example": {
+                "transactionId": "QX12345678",
+                "accountReference": "INV-1001",
+            },
+        },
+    )
+
+
 @router.get("/token")
 def mpesa_token(x_api_key: str = Header(...)) -> dict[str, str]:
     verify_internal_api_key(x_api_key)
@@ -711,6 +741,79 @@ def mpesa_bill_manager_cancel_bulk_invoices(
     verify_internal_api_key(x_api_key)
     try:
         return cancel_bill_manager_bulk_invoices(payload.model_dump())
+    except Exception as error:
+        handle_mpesa_error(error)
+        raise
+
+
+@router.post("/bill-manager/optin")
+def mpesa_bill_manager_optin(
+    payload: BillManagerOptInRequest | None = Body(
+        default=None,
+        openapi_examples={
+            "env_defaults": {
+                "summary": "Use .env defaults",
+                "value": {},
+            },
+            "override_values": {
+                "summary": "Override opt-in fields",
+                "value": {
+                    "email": "billing@example.com",
+                    "officialContact": "0710123456",
+                },
+            },
+        },
+    ),
+    x_api_key: str = Header(...),
+) -> dict[str, Any]:
+    verify_internal_api_key(x_api_key)
+    try:
+        return bill_manager_optin_from_settings(
+            payload.model_dump(exclude_none=True) if payload else None,
+        )
+    except Exception as error:
+        handle_mpesa_error(error)
+        raise
+
+
+@router.post("/bill-manager/change-optin-details")
+def mpesa_bill_manager_change_optin_details(
+    payload: BillManagerOptInRequest | None = Body(
+        default=None,
+        openapi_examples={
+            "env_defaults": {
+                "summary": "Use .env defaults",
+                "value": {},
+            },
+            "override_values": {
+                "summary": "Override opt-in fields",
+                "value": {
+                    "sendReminders": 0,
+                    "callbackurl": "https://example.com/callbacks/payments/bill-manager",
+                },
+            },
+        },
+    ),
+    x_api_key: str = Header(...),
+) -> dict[str, Any]:
+    verify_internal_api_key(x_api_key)
+    try:
+        return change_bill_manager_optin_details_from_settings(
+            payload.model_dump(exclude_none=True) if payload else None,
+        )
+    except Exception as error:
+        handle_mpesa_error(error)
+        raise
+
+
+@router.post("/bill-manager/reconciliation")
+def mpesa_bill_manager_reconciliation(
+    payload: BillManagerReconciliationRequest,
+    x_api_key: str = Header(...),
+) -> dict[str, Any]:
+    verify_internal_api_key(x_api_key)
+    try:
+        return reconcile_bill_manager(payload.model_dump())
     except Exception as error:
         handle_mpesa_error(error)
         raise

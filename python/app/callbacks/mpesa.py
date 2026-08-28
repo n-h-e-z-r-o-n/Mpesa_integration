@@ -134,3 +134,9 @@ async def ratiba_callback(request: Request) -> dict[str, Any]:
 async def pull_transactions_callback(request: Request) -> dict[str, Any]:
     await log_callback(request, "pull_transactions")
     return accepted_response()
+
+
+@router.post("/callbacks/payments/bill-manager")
+async def bill_manager_callback(request: Request) -> dict[str, Any]:
+    await log_callback(request, "bill_manager")
+    return accepted_response()

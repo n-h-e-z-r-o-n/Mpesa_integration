@@ -4,11 +4,16 @@ from app.providers.mpesa.b2b import send_b2b_payment
 from app.providers.mpesa.b2c import send_b2c_payment
 from app.providers.mpesa.b2pochi_prod import send_b2pochi_payment
 from app.providers.mpesa.bill_manager import (
+    bill_manager_optin,
+    bill_manager_optin_from_settings,
     cancel_bill_manager_bulk_invoices,
     cancel_bill_manager_single_invoice,
+    change_bill_manager_optin_details,
+    change_bill_manager_optin_details_from_settings,
     create_bill_manager_bulk_invoices,
     create_bill_manager_single_invoice,
-    send_bill_manager_request,
+    build_bill_manager_optin_payload,
+    reconcile_bill_manager,
 )
 from app.providers.mpesa.c2b_register import register_c2b_urls
 from app.providers.mpesa.c2b_simulate import simulate_c2b_payment
@@ -56,11 +61,16 @@ __all__ = [
     "query_account_balance",
     "create_ratiba_standing_order",
     "generate_dynamic_qrcode",
+    "build_bill_manager_optin_payload",
+    "bill_manager_optin",
+    "bill_manager_optin_from_settings",
+    "change_bill_manager_optin_details",
+    "change_bill_manager_optin_details_from_settings",
     "create_bill_manager_single_invoice",
     "create_bill_manager_bulk_invoices",
     "cancel_bill_manager_single_invoice",
     "cancel_bill_manager_bulk_invoices",
-    "send_bill_manager_request",
+    "reconcile_bill_manager",
     "build_pull_transactions_registration_payload",
     "query_pull_transactions",
     "register_pull_transactions",

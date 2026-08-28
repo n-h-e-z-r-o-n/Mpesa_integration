@@ -45,9 +45,16 @@ class Settings(BaseSettings):
     MPESA_MOBILE_NUMBER_VALIDATION_PATH: str = "/imsi/v2/checkATI"
     MPESA_DYNAMIC_QRCODE_GENERATE_PATH: str | None = None
     MPESA_BILL_MANAGER_CREATE_SINGLE_INVOICE_PATH: str | None = None
+    MPESA_BILL_MANAGER_OPTIN_PATH: str = "/v1/billmanager-invoice/optin"
+    MPESA_BILL_MANAGER_CHANGE_OPTIN_DETAILS_PATH: str = "/v1/billmanager-invoice/change-optin-details"
     MPESA_BILL_MANAGER_CREATE_BULK_INVOICES_PATH: str = "/v1/billmanager-invoice/create-bulk-invoices"
     MPESA_BILL_MANAGER_CANCEL_SINGLE_INVOICE_PATH: str = "/v1/billmanager-invoice/cancel-single-invoice"
     MPESA_BILL_MANAGER_CANCEL_BULK_INVOICES_PATH: str = "/v1/billmanager-invoice/cancel-bulk-invoices"
+    MPESA_BILL_MANAGER_RECONCILIATION_PATH: str = "/v1/billmanager-invoice/reconciliation"
+    MPESA_BILL_MANAGER_EMAIL: str | None = None
+    MPESA_BILL_MANAGER_OFFICIAL_CONTACT: str | None = None
+    MPESA_BILL_MANAGER_SEND_REMINDERS: int = 1
+    MPESA_BILL_MANAGER_LOGO: str | None = None
     MPESA_PULL_TRANSACTIONS_QUERY_PATH: str | None = None
     MPESA_PULL_TRANSACTIONS_REGISTER_PATH: str = "/pulltransactions/v1/register"
     MPESA_PULL_TRANSACTIONS_REQUEST_TYPE: str = "Pull"
@@ -65,6 +72,7 @@ class Settings(BaseSettings):
     MPESA_ACCOUNT_BALANCE_RESULT_URL: str | None = None
     MPESA_ACCOUNT_BALANCE_TIMEOUT_URL: str | None = None
     MPESA_RATIBA_CALLBACK_URL: str | None = None
+    MPESA_BILL_MANAGER_CALLBACK_URL: str | None = None
     MPESA_PULL_TRANSACTIONS_CALLBACK_URL: str | None = None
 
     model_config = SettingsConfigDict(
@@ -181,6 +189,13 @@ class Settings(BaseSettings):
         return self.MPESA_PULL_TRANSACTIONS_CALLBACK_URL or self._build_url(
             self.PUBLIC_BASE_URL,
             "/callbacks/payments/pull-transactions",
+        )
+
+    @property
+    def bill_manager_callback_url(self) -> str:
+        return self.MPESA_BILL_MANAGER_CALLBACK_URL or self._build_url(
+            self.PUBLIC_BASE_URL,
+            "/callbacks/payments/bill-manager",
         )
 
     @property

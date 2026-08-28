@@ -148,6 +148,14 @@ These env values control the exact Safaricom OAuth and API paths used by this ga
 - Explicit path for `/api/v1/mpesa/dynamic-qrcode/generate`.
 - Default: `/mpesa/qrcode/v1/generate`
 
+`MPESA_BILL_MANAGER_OPTIN_PATH`
+- Explicit path for `/api/v1/mpesa/bill-manager/optin`.
+- Default: `/v1/billmanager-invoice/optin`
+
+`MPESA_BILL_MANAGER_CHANGE_OPTIN_DETAILS_PATH`
+- Explicit path for `/api/v1/mpesa/bill-manager/change-optin-details`.
+- Default: `/v1/billmanager-invoice/change-optin-details`
+
 `MPESA_BILL_MANAGER_CREATE_SINGLE_INVOICE_PATH`
 - Explicit path for `/api/v1/mpesa/bill-manager/invoices/create-single`.
 - Default: `/v1/billmanager-invoice/create-single-invoice`
@@ -163,6 +171,23 @@ These env values control the exact Safaricom OAuth and API paths used by this ga
 `MPESA_BILL_MANAGER_CANCEL_BULK_INVOICES_PATH`
 - Explicit path for `/api/v1/mpesa/bill-manager/invoices/cancel-bulk`.
 - Default: `/v1/billmanager-invoice/cancel-bulk-invoices`
+
+`MPESA_BILL_MANAGER_RECONCILIATION_PATH`
+- Explicit path for `/api/v1/mpesa/bill-manager/reconciliation`.
+- Default: `/v1/billmanager-invoice/reconciliation`
+
+`MPESA_BILL_MANAGER_EMAIL`
+- Official Bill Manager contact email used for opt-in.
+
+`MPESA_BILL_MANAGER_OFFICIAL_CONTACT`
+- Official Bill Manager contact phone number used for opt-in.
+
+`MPESA_BILL_MANAGER_SEND_REMINDERS`
+- Reminder flag used for Bill Manager opt-in and opt-in updates.
+- Default: `1`
+
+`MPESA_BILL_MANAGER_LOGO`
+- Optional Bill Manager logo reference or encoded value.
 
 `MPESA_PULL_TRANSACTIONS_PATH`
 - Default Pull Transactions path.
@@ -255,6 +280,9 @@ Avoid using the words `M-PESA`, `M-Pesa`, or `mpesa` anywhere in these callback 
 `MPESA_RATIBA_CALLBACK_URL`
 - Ratiba callback URL.
 
+`MPESA_BILL_MANAGER_CALLBACK_URL`
+- Bill Manager callback URL.
+
 `MPESA_PULL_TRANSACTIONS_CALLBACK_URL`
 - Pull Transactions callback URL.
 
@@ -291,10 +319,17 @@ MPESA_BILL_MANAGER_PATH=/v1/billmanager-invoice/create-single-invoice
 MPESA_PULL_TRANSACTIONS_PATH=/pulltransactions/v1/query
 MPESA_MOBILE_NUMBER_VALIDATION_PATH=/imsi/v2/checkATI
 MPESA_DYNAMIC_QRCODE_GENERATE_PATH=/mpesa/qrcode/v1/generate
+MPESA_BILL_MANAGER_OPTIN_PATH=/v1/billmanager-invoice/optin
+MPESA_BILL_MANAGER_CHANGE_OPTIN_DETAILS_PATH=/v1/billmanager-invoice/change-optin-details
 MPESA_BILL_MANAGER_CREATE_SINGLE_INVOICE_PATH=/v1/billmanager-invoice/create-single-invoice
 MPESA_BILL_MANAGER_CREATE_BULK_INVOICES_PATH=/v1/billmanager-invoice/create-bulk-invoices
 MPESA_BILL_MANAGER_CANCEL_SINGLE_INVOICE_PATH=/v1/billmanager-invoice/cancel-single-invoice
 MPESA_BILL_MANAGER_CANCEL_BULK_INVOICES_PATH=/v1/billmanager-invoice/cancel-bulk-invoices
+MPESA_BILL_MANAGER_RECONCILIATION_PATH=/v1/billmanager-invoice/reconciliation
+MPESA_BILL_MANAGER_EMAIL=billing@example.com
+MPESA_BILL_MANAGER_OFFICIAL_CONTACT=0710123456
+MPESA_BILL_MANAGER_SEND_REMINDERS=1
+MPESA_BILL_MANAGER_LOGO=
 MPESA_PULL_TRANSACTIONS_QUERY_PATH=/pulltransactions/v1/query
 MPESA_PULL_TRANSACTIONS_REGISTER_PATH=/pulltransactions/v1/register
 MPESA_PULL_TRANSACTIONS_REQUEST_TYPE=Pull
@@ -319,6 +354,7 @@ MPESA_REVERSAL_TIMEOUT_URL=https://your-domain.com/callbacks/payments/reversal/t
 MPESA_ACCOUNT_BALANCE_RESULT_URL=https://your-domain.com/callbacks/payments/account-balance/result
 MPESA_ACCOUNT_BALANCE_TIMEOUT_URL=https://your-domain.com/callbacks/payments/account-balance/timeout
 MPESA_RATIBA_CALLBACK_URL=https://your-domain.com/callbacks/payments/ratiba
+MPESA_BILL_MANAGER_CALLBACK_URL=https://your-domain.com/callbacks/payments/bill-manager
 MPESA_PULL_TRANSACTIONS_CALLBACK_URL=https://your-domain.com/callbacks/payments/pull-transactions
 ```
 
@@ -581,11 +617,50 @@ Invoke-RestMethod `
 ```powershell
 Invoke-RestMethod `
   -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/mpesa/bill-manager/optin" `
+  -Headers @{ "x-api-key" = "change-me" }
+```
+
+Bill Manager opt-in is env-driven, so the gateway can fill:
+
+- `shortcode` from `MPESA_SHORTCODE`
+- `email` from `MPESA_BILL_MANAGER_EMAIL`
+- `officialContact` from `MPESA_BILL_MANAGER_OFFICIAL_CONTACT`
+- `sendReminders` from `MPESA_BILL_MANAGER_SEND_REMINDERS`
+- `logo` from `MPESA_BILL_MANAGER_LOGO`
+- `callbackurl` from `MPESA_BILL_MANAGER_CALLBACK_URL`
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/mpesa/bill-manager/change-optin-details" `
+  -Headers @{ "x-api-key" = "change-me" } `
+  -ContentType "application/json" `
+  -Body '{
+    "sendReminders": 0
+  }'
+```
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
   -Uri "http://127.0.0.1:8000/api/v1/mpesa/bill-manager/invoices/cancel-bulk" `
   -Headers @{ "x-api-key" = "change-me" } `
   -ContentType "application/json" `
   -Body '{
     "externalReference": "BILL-1001"
+  }'
+```
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/mpesa/bill-manager/reconciliation" `
+  -Headers @{ "x-api-key" = "change-me" } `
+  -ContentType "application/json" `
+  -Body '{
+    "transactionId": "QX12345678",
+    "accountReference": "INV-1001"
   }'
 ```
 
@@ -652,6 +727,7 @@ These callback endpoints are available locally:
 - `/callbacks/payments/reversal/timeout`
 - `/callbacks/payments/account-balance/result`
 - `/callbacks/payments/account-balance/timeout`
+- `/callbacks/payments/bill-manager`
 - `/callbacks/payments/pull-transactions`
 
 You can locally test a callback route with:
