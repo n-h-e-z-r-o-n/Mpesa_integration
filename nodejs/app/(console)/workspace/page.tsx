@@ -1,10 +1,13 @@
 import { AdminOperationsWorkspace } from "@/components/payments/admin-operations-workspace";
 import { TransactionExplorer } from "@/components/transactions/transaction-explorer";
 import { adminOperatorOperations } from "@/lib/gateway/admin-operations";
+import { listStoredTransactions } from "@/lib/repositories/telemetry-store";
 import { getTransactions } from "@/lib/repositories/runtime-store";
+import type { TransactionRecord } from "@/types/gateway";
 
-export default function WorkspacePage() {
-  const transactions = getTransactions();
+export default async function WorkspacePage() {
+  const transactions: TransactionRecord[] =
+    (await listStoredTransactions().catch(() => null)) ?? getTransactions();
 
   return (
     <div className="space-y-6">
@@ -31,7 +34,7 @@ export default function WorkspacePage() {
         <div>
           <h2 className="text-lg font-semibold text-white">Pulled Transactions</h2>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Review all transactions observed by this runtime, then filter by operation, status, or
+            Review persisted transaction telemetry, then filter by operation, status, or
             application when tracing operator actions.
           </p>
         </div>

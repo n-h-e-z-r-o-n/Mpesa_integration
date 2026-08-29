@@ -9,8 +9,10 @@ type ProviderEventRow = {
   payload: Record<string, unknown>;
   processing_status: string;
   received_at: string;
-  source_ip: string | null;
+  source_ip?: string | null;
 };
+
+let providerEventsSupportsSourceIp: boolean | null = null;
 
 function readCallbackPayload(payload: Record<string, unknown>) {
   if (payload.Body && typeof payload.Body === "object") {
@@ -63,6 +65,81 @@ function mapCallbackRow(row: ProviderEventRow): CallbackRecord {
   };
 }
 
+function buildInsertPayload(record: CallbackRecord, includeSourceIp: boolean) {
+  return {
+    provider: "mpesa",
+    event_type: record.callbackName,
+    provider_request_id: inferProviderRequestId(readCallbackPayload(record.payload)),
+    payload: record.payload,
+    payload_hash: buildPayloadHash(record.payload),
+    processing_status: mapProcessingStatus(record.processingStatus),
+    received_at: record.receivedAt,
+    ...(includeSourceIp ? { source_ip: record.sourceIp ?? null } : {}),
+  };
+}
+
+function getSelectColumns(includeSourceIp: boolean) {
+  return includeSourceIp
+    ? "id, event_type, payload, processing_status, received_at, source_ip"
+    : "id, event_type, payload, processing_status, received_at";
+}
+
+function isMissingSourceIpColumn(error: { message?: string } | null) {
+  return Boolean(error?.message?.includes("'source_ip' column"));
+}
+
+type CallbackQueryOptions = {
+  callbackName?: CallbackName;
+  callbackNames?: CallbackName[];
+  since?: string;
+};
+
+async function loadStoredCallbacks(limit: number, options?: CallbackQueryOptions) {
+  const supabase = createSupabaseAdminClient();
+
+  if (!supabase) {
+    return null;
+  }
+
+  const runQuery = async (includeSourceIp: boolean) => {
+    let query = supabase
+      .from("provider_events")
+      .select(getSelectColumns(includeSourceIp))
+      .eq("provider", "mpesa");
+
+    if (options?.callbackNames?.length) {
+      query =
+        options.callbackNames.length === 1
+          ? query.eq("event_type", options.callbackNames[0])
+          : query.in("event_type", options.callbackNames);
+    } else if (options?.callbackName) {
+      query = query.eq("event_type", options.callbackName);
+    }
+
+    if (options?.since) {
+      query = query.gte("received_at", options.since);
+    }
+
+    return query.order("received_at", { ascending: false }).limit(limit);
+  };
+
+  const includeSourceIp = providerEventsSupportsSourceIp !== false;
+  let { data, error } = await runQuery(includeSourceIp);
+
+  if (isMissingSourceIpColumn(error)) {
+    providerEventsSupportsSourceIp = false;
+    ({ data, error } = await runQuery(false));
+  } else if (!error && providerEventsSupportsSourceIp === null) {
+    providerEventsSupportsSourceIp = includeSourceIp;
+  }
+
+  if (error) {
+    throw new Error(`Unable to load stored callbacks: ${error.message}`);
+  }
+
+  return ((data ?? []) as unknown as ProviderEventRow[]).map(mapCallbackRow);
+}
+
 export async function persistCallbackRecord(record: CallbackRecord) {
   const supabase = createSupabaseAdminClient();
 
@@ -70,17 +147,17 @@ export async function persistCallbackRecord(record: CallbackRecord) {
     return;
   }
 
-  const innerPayload = readCallbackPayload(record.payload);
-  const { error } = await supabase.from("provider_events").insert({
-    provider: "mpesa",
-    event_type: record.callbackName,
-    provider_request_id: inferProviderRequestId(innerPayload),
-    payload: record.payload,
-    payload_hash: buildPayloadHash(record.payload),
-    processing_status: mapProcessingStatus(record.processingStatus),
-    received_at: record.receivedAt,
-    source_ip: record.sourceIp ?? null,
-  });
+  const includeSourceIp = providerEventsSupportsSourceIp !== false;
+  let { error } = await supabase
+    .from("provider_events")
+    .insert(buildInsertPayload(record, includeSourceIp));
+
+  if (isMissingSourceIpColumn(error)) {
+    providerEventsSupportsSourceIp = false;
+    ({ error } = await supabase.from("provider_events").insert(buildInsertPayload(record, false)));
+  } else if (!error && providerEventsSupportsSourceIp === null) {
+    providerEventsSupportsSourceIp = includeSourceIp;
+  }
 
   if (error) {
     throw new Error(`Unable to persist callback event: ${error.message}`);
@@ -88,24 +165,20 @@ export async function persistCallbackRecord(record: CallbackRecord) {
 }
 
 export async function listStoredCallbacks(limit = 50) {
-  const supabase = createSupabaseAdminClient();
+  return loadStoredCallbacks(limit);
+}
 
-  if (!supabase) {
-    return null;
-  }
+export async function getLatestStoredCallback(callbackName: CallbackName) {
+  const callbacks = await loadStoredCallbacks(1, { callbackName });
+  return callbacks?.[0] ?? null;
+}
 
-  const { data, error } = await supabase
-    .from("provider_events")
-    .select("id, event_type, payload, processing_status, received_at, source_ip")
-    .eq("provider", "mpesa")
-    .order("received_at", { ascending: false })
-    .limit(limit);
-
-  if (error) {
-    throw new Error(`Unable to load stored callbacks: ${error.message}`);
-  }
-
-  return (data as ProviderEventRow[]).map(mapCallbackRow);
+export async function listStoredCallbacksSince(
+  callbackNames: CallbackName[],
+  since: string,
+  limit = 500,
+) {
+  return loadStoredCallbacks(limit, { callbackNames, since });
 }
 
 export { hasSupabaseAdminAccess };

@@ -13,8 +13,9 @@ import { getGatewayConfig } from "@/lib/mpesa/config";
 import { GatewayAuthenticationError, GatewayValidationError } from "@/lib/mpesa/errors";
 import { createRequestId } from "@/lib/mpesa/utils";
 import { addRequestLog } from "@/lib/repositories/runtime-store";
+import { persistRequestLog } from "@/lib/repositories/telemetry-store";
 import { executeMpesaOperation, normalizeError, processMpesaCallback } from "@/services/mpesa/service";
-import type { CallbackName, MpesaOperation } from "@/types/gateway";
+import type { CallbackName, MpesaOperation, RequestLogRecord } from "@/types/gateway";
 
 function responseWithRequestId(payload: unknown, status: number, requestId: string) {
   const response = NextResponse.json(payload, { status });
@@ -142,7 +143,7 @@ export async function handleApplicationOperation(request: NextRequest, operation
       startedAt,
     };
     const normalized = normalizeError(error instanceof ZodError ? toValidationError(error) : error, operation, context);
-    addRequestLog({
+    const requestLog = {
       id: randomUUID(),
       requestId,
       applicationId: "unknown",
@@ -154,7 +155,9 @@ export async function handleApplicationOperation(request: NextRequest, operation
       latencyMs: Date.now() - startedAt,
       timestamp: new Date().toISOString(),
       error: sanitizeForLogs(normalized.error ?? {}),
-    });
+    } satisfies RequestLogRecord;
+    addRequestLog(requestLog);
+    await persistRequestLog(requestLog).catch(() => null);
     logEvent("warn", "Gateway application operation failed", {
       requestId,
       operation,
@@ -238,6 +241,21 @@ export async function handleAdminOperation(request: NextRequest, operation: Mpes
       adminUser: session.email,
     };
     const normalized = normalizeError(error instanceof ZodError ? toValidationError(error) : error, operation, context);
+    const requestLog = {
+      id: randomUUID(),
+      requestId,
+      applicationId: "admin-console",
+      provider: "mpesa",
+      operation,
+      route: request.nextUrl.pathname,
+      method: request.method,
+      status: normalized.httpStatus,
+      latencyMs: Date.now() - startedAt,
+      timestamp: new Date().toISOString(),
+      error: sanitizeForLogs(normalized.error ?? {}),
+    } satisfies RequestLogRecord;
+    addRequestLog(requestLog);
+    await persistRequestLog(requestLog).catch(() => null);
     return responseWithRequestId(normalized, normalized.httpStatus, requestId);
   }
 }

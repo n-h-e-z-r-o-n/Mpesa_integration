@@ -174,6 +174,19 @@ export interface GatewayOverview {
   callbackCount: number;
   requestCount: number;
   recentFailures: number;
+  collectionsToday: number;
+  payoutsToday: number;
+  netFlowToday: number;
+  balanceFreshnessMinutes?: number;
+  oldestPendingMinutes?: number;
+  shortcodeBalance: {
+    status: "available" | "unavailable";
+    currency?: string;
+    totalCurrent?: number;
+    totalAvailable?: number;
+    updatedAt?: string;
+    accountCount: number;
+  };
   transactions: {
     accepted: number;
     pending: number;

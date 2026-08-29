@@ -1,9 +1,13 @@
 import { EmptyState } from "@/components/ui/empty-state";
 import { JsonViewer } from "@/components/ui/json-viewer";
+import { listStoredRequestLogs } from "@/lib/repositories/telemetry-store";
 import { getAuditLogs, getRequestLogs } from "@/lib/repositories/runtime-store";
+import type { RequestLogRecord } from "@/types/gateway";
 
-export default function LogsPage() {
-  const requestLogs = getRequestLogs().slice(0, 10);
+export default async function LogsPage() {
+  const allRequestLogs: RequestLogRecord[] =
+    (await listStoredRequestLogs().catch(() => null)) ?? getRequestLogs();
+  const requestLogs = allRequestLogs.slice(0, 10);
   const auditLogs = getAuditLogs().slice(0, 10);
 
   return (
@@ -28,7 +32,7 @@ export default function LogsPage() {
               </div>
               <div className="mono mt-2 text-xs text-[var(--text-muted)]">{log.requestId}</div>
             </div>
-          )) : <EmptyState title="No request logs" description="Runtime request and response inspection will appear here after traffic reaches this deployment." />}
+          )) : <EmptyState title="No request logs" description="Persisted request inspection will appear here after gateway traffic reaches this deployment." />}
         </div>
       </section>
 

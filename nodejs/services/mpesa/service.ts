@@ -20,7 +20,18 @@ import {
   sanitizeAlphaNumeric,
 } from "@/lib/mpesa/utils";
 import { logEvent, sanitizeForLogs } from "@/lib/logger";
-import { persistCallbackRecord } from "@/lib/repositories/callback-store";
+import {
+  getLatestStoredCallback,
+  listStoredCallbacks,
+  listStoredCallbacksSince,
+  persistCallbackRecord,
+} from "@/lib/repositories/callback-store";
+import {
+  listStoredRequestLogs,
+  listStoredTransactions,
+  persistRequestLog,
+  persistTransactionSnapshot,
+} from "@/lib/repositories/telemetry-store";
 import {
   addCallback,
   addRequestLog,
@@ -259,6 +270,30 @@ function buildLogRecord(
     requestBody: sanitizeForLogs(requestPayload),
     responseBody: sanitizeForLogs((response.data ?? response.error ?? {}) as Record<string, unknown>),
   };
+}
+
+function startOfTodayIso(reference = new Date()) {
+  const dayStart = new Date(reference);
+  dayStart.setHours(0, 0, 0, 0);
+  return dayStart.toISOString();
+}
+
+function readCallbackMetadataItems(payload: Record<string, unknown>) {
+  const callbackMetadata = payload.CallbackMetadata;
+  if (!callbackMetadata || typeof callbackMetadata !== "object") {
+    return [];
+  }
+
+  const items = (callbackMetadata as Record<string, unknown>).Item;
+  if (Array.isArray(items)) {
+    return items.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>;
+  }
+
+  if (items && typeof items === "object") {
+    return [items as Record<string, unknown>];
+  }
+
+  return [];
 }
 
 function normalizeSuccess(
@@ -678,7 +713,23 @@ export async function executeMpesaOperation(
   const response = normalizeSuccess(operation, context, operation === "stkPush" ? 202 : 200, upstream.data);
   const record = buildTransactionRecord(operation, context, requestPayload, upstream.data, response.status);
   upsertTransaction(record);
-  addRequestLog(buildLogRecord(context, operation, response, requestPayload));
+  await persistTransactionSnapshot(record).catch((error) => {
+    logEvent("warn", "Unable to persist transaction snapshot", {
+      requestId: context.requestId,
+      operation,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  });
+
+  const requestLog = buildLogRecord(context, operation, response, requestPayload);
+  addRequestLog(requestLog);
+  await persistRequestLog(requestLog).catch((error) => {
+    logEvent("warn", "Unable to persist request log", {
+      requestId: context.requestId,
+      operation,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  });
   logEvent("info", "M-Pesa operation executed", {
     requestId: context.requestId,
     operation,
@@ -707,6 +758,220 @@ function readCallbackPayload(payload: Record<string, unknown>) {
   return payload;
 }
 
+function readResultParameters(payload: Record<string, unknown>) {
+  const resultParameters = payload.ResultParameters;
+  if (!resultParameters || typeof resultParameters !== "object") {
+    return [];
+  }
+
+  const parameters = (resultParameters as Record<string, unknown>).ResultParameter;
+  if (Array.isArray(parameters)) {
+    return parameters.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>;
+  }
+
+  if (parameters && typeof parameters === "object") {
+    return [parameters as Record<string, unknown>];
+  }
+
+  return [];
+}
+
+function parseBalanceNumber(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseAmount(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function extractShortcodeBalance(record?: { callbackName: CallbackName; payload: Record<string, unknown>; receivedAt: string } | null) {
+  if (!record || record.callbackName !== "accountBalanceResult") {
+    return null;
+  }
+
+  const payload = readCallbackPayload(record.payload);
+  if (!(payload.ResultCode === 0 || payload.ResultCode === "0")) {
+    return null;
+  }
+
+  const balanceValue = readResultParameters(payload).find(
+    (parameter) => parameter.Key === "AccountBalance" && typeof parameter.Value === "string",
+  )?.Value;
+
+  if (typeof balanceValue !== "string" || !balanceValue.trim()) {
+    return null;
+  }
+
+  const accounts = balanceValue
+    .split("&")
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .map((segment) => {
+      const [name, currency, currentRaw, availableRaw, reservedRaw, unclearedRaw] = segment
+        .split("|")
+        .map((part) => part.trim());
+
+      if (!name || !currency || !currentRaw || !availableRaw || !reservedRaw || !unclearedRaw) {
+        return null;
+      }
+
+      const current = parseBalanceNumber(currentRaw);
+      const available = parseBalanceNumber(availableRaw);
+      const reserved = parseBalanceNumber(reservedRaw);
+      const uncleared = parseBalanceNumber(unclearedRaw);
+
+      if (current === null || available === null || reserved === null || uncleared === null) {
+        return null;
+      }
+
+      return {
+        name,
+        currency,
+        current,
+        available,
+        reserved,
+        uncleared,
+      };
+    })
+    .filter((account): account is NonNullable<typeof account> => Boolean(account));
+
+  if (!accounts.length) {
+    return null;
+  }
+
+  const currencies = [...new Set(accounts.map((account) => account.currency))];
+
+  return {
+    status: "available" as const,
+    currency: currencies.length === 1 ? currencies[0] : undefined,
+    totalCurrent: roundMoney(
+      accounts.reduce((total, account) => total + account.current, 0),
+    ),
+    totalAvailable: roundMoney(
+      accounts.reduce((total, account) => total + account.available, 0),
+    ),
+    updatedAt: record.receivedAt,
+    accountCount: accounts.length,
+  };
+}
+
+function pickLatestCallback<T extends { receivedAt: string }>(...records: Array<T | null | undefined>) {
+  return records
+    .filter((record): record is T => Boolean(record))
+    .sort((left, right) => Date.parse(right.receivedAt) - Date.parse(left.receivedAt))[0] ?? null;
+}
+
+function readNamedValue(
+  items: Array<Record<string, unknown>>,
+  keys: string[],
+  keyField: "Key" | "Name" = "Key",
+) {
+  const match = items.find(
+    (item) =>
+      typeof item[keyField] === "string" &&
+      keys.some((key) => key.toLowerCase() === String(item[keyField]).toLowerCase()),
+  );
+
+  return match?.Value;
+}
+
+function extractCollectionAmount(callback: { callbackName: CallbackName; payload: Record<string, unknown> }) {
+  const payload = readCallbackPayload(callback.payload);
+
+  if (callback.callbackName === "stk") {
+    if (!(payload.ResultCode === 0 || payload.ResultCode === "0")) {
+      return null;
+    }
+
+    return parseAmount(readNamedValue(readCallbackMetadataItems(payload), ["Amount"]));
+  }
+
+  if (callback.callbackName === "c2bConfirmation") {
+    return parseAmount(payload.TransAmount ?? payload.Amount);
+  }
+
+  return null;
+}
+
+function extractPayoutAmount(callback: { callbackName: CallbackName; payload: Record<string, unknown> }) {
+  const payload = readCallbackPayload(callback.payload);
+  if (!(callback.callbackName === "b2cResult" || callback.callbackName === "b2bResult")) {
+    return null;
+  }
+
+  if (!(payload.ResultCode === 0 || payload.ResultCode === "0")) {
+    return null;
+  }
+
+  return parseAmount(
+    readNamedValue(readResultParameters(payload), ["TransactionAmount", "Amount", "DebitAmount"]) ??
+      payload.Amount,
+  );
+}
+
+function summarizeTodayFlows(callbacks: Array<{ callbackName: CallbackName; payload: Record<string, unknown> }>) {
+  let collectionsToday = 0;
+  let payoutsToday = 0;
+
+  for (const callback of callbacks) {
+    const collectionAmount = extractCollectionAmount(callback);
+    if (collectionAmount !== null) {
+      collectionsToday += collectionAmount;
+    }
+
+    const payoutAmount = extractPayoutAmount(callback);
+    if (payoutAmount !== null) {
+      payoutsToday += payoutAmount;
+    }
+  }
+
+  return {
+    collectionsToday: roundMoney(collectionsToday),
+    payoutsToday: roundMoney(payoutsToday),
+    netFlowToday: roundMoney(collectionsToday - payoutsToday),
+  };
+}
+
+function summarizePendingTransactions(transactions: TransactionRecord[]) {
+  const pending = transactions.filter(
+    (transaction) => transaction.status === "pending" || transaction.status === "accepted",
+  );
+
+  if (!pending.length) {
+    return {
+      pendingCount: 0,
+      oldestPendingMinutes: undefined,
+    };
+  }
+
+  const oldestCreatedAt = pending
+    .map((transaction) => Date.parse(transaction.createdAt))
+    .filter((value) => Number.isFinite(value))
+    .sort((left, right) => left - right)[0];
+
+  return {
+    pendingCount: pending.length,
+    oldestPendingMinutes:
+      oldestCreatedAt !== undefined
+        ? Math.max(0, Math.floor((Date.now() - oldestCreatedAt) / 60000))
+        : undefined,
+  };
+}
+
 function findTransactionForCallback(payload: Record<string, unknown>) {
   const transactionId = typeof payload.TransactionID === "string" ? payload.TransactionID : undefined;
   const conversationId = typeof payload.ConversationID === "string" ? payload.ConversationID : undefined;
@@ -717,11 +982,14 @@ function findTransactionForCallback(payload: Record<string, unknown>) {
 
   return getTransactions().find(
     (transaction) =>
-      transaction.id === checkoutRequestId ||
-      transaction.transactionId === transactionId ||
-      transaction.providerConversationId === conversationId ||
-      transaction.providerOriginatorConversationId === originatorConversationId ||
-      transaction.providerRequestId === checkoutRequestId,
+      (checkoutRequestId !== undefined && transaction.id === checkoutRequestId) ||
+      (transactionId !== undefined && transaction.transactionId === transactionId) ||
+      (conversationId !== undefined && transaction.providerConversationId === conversationId) ||
+      (
+        originatorConversationId !== undefined &&
+        transaction.providerOriginatorConversationId === originatorConversationId
+      ) ||
+      (checkoutRequestId !== undefined && transaction.providerRequestId === checkoutRequestId),
   );
 }
 
@@ -782,9 +1050,16 @@ export async function processMpesaCallback(
         : undefined);
     transaction.callbackPayloads.unshift(sanitizeForLogs(payload));
     upsertTransaction(transaction);
+    await persistTransactionSnapshot(transaction).catch((error) => {
+      logEvent("warn", "Unable to persist callback-updated transaction snapshot", {
+        requestId,
+        callbackName,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    });
   }
 
-  addRequestLog({
+  const requestLog = {
     id: randomUUID(),
     requestId,
     applicationId: "safaricom",
@@ -802,6 +1077,14 @@ export async function processMpesaCallback(
     timestamp: new Date().toISOString(),
     requestBody: sanitizeForLogs(payload),
     responseBody: { ResultCode: 0, ResultDesc: "Accepted" },
+  } satisfies RequestLogRecord;
+  addRequestLog(requestLog);
+  await persistRequestLog(requestLog).catch((error) => {
+    logEvent("warn", "Unable to persist callback request log", {
+      requestId,
+      callbackName,
+      message: error instanceof Error ? error.message : "unknown",
+    });
   });
 
   logEvent("info", "M-Pesa callback received", {
@@ -820,9 +1103,37 @@ export async function processMpesaCallback(
 }
 
 export async function getGatewayOverview(): Promise<GatewayOverview> {
-  const transactions = getTransactions();
-  const logs = getRequestLogs();
-  const callbacks = getCallbacks();
+  const todayStart = startOfTodayIso();
+  const [storedTransactions, storedLogs, storedCallbacks, todayStoredCallbacks, latestStoredBalanceCallback] =
+    await Promise.all([
+      listStoredTransactions(250).catch(() => null),
+      listStoredRequestLogs(250).catch(() => null),
+      listStoredCallbacks(250).catch(() => null),
+      listStoredCallbacksSince(
+        ["stk", "c2bConfirmation", "b2cResult", "b2bResult", "accountBalanceResult"],
+        todayStart,
+        500,
+      ).catch(() => null),
+      getLatestStoredCallback("accountBalanceResult").catch(() => null),
+    ]);
+
+  const transactions = storedTransactions ?? getTransactions();
+  const logs = storedLogs ?? getRequestLogs();
+  const callbacks = storedCallbacks ?? getCallbacks();
+  const todayCallbacks =
+    todayStoredCallbacks ??
+    callbacks.filter((callback) => Date.parse(callback.receivedAt) >= Date.parse(todayStart));
+  const latestRuntimeBalanceCallback =
+    callbacks.find((callback) => callback.callbackName === "accountBalanceResult") ?? null;
+  const latestBalanceSnapshot = extractShortcodeBalance(
+    pickLatestCallback(latestRuntimeBalanceCallback, latestStoredBalanceCallback),
+  );
+  const balanceFreshnessMinutes =
+    latestBalanceSnapshot?.updatedAt
+      ? Math.max(0, Math.floor((Date.now() - Date.parse(latestBalanceSnapshot.updatedAt)) / 60000))
+      : undefined;
+  const { collectionsToday, payoutsToday, netFlowToday } = summarizeTodayFlows(todayCallbacks);
+  const { pendingCount, oldestPendingMinutes } = summarizePendingTransactions(transactions);
 
   let oauthHealthy = false;
   try {
@@ -842,9 +1153,20 @@ export async function getGatewayOverview(): Promise<GatewayOverview> {
     callbackCount: callbacks.length,
     requestCount: logs.length,
     recentFailures: failedTransactions,
+    collectionsToday,
+    payoutsToday,
+    netFlowToday,
+    balanceFreshnessMinutes,
+    oldestPendingMinutes,
+    shortcodeBalance:
+      latestBalanceSnapshot ??
+      {
+        status: "unavailable",
+        accountCount: 0,
+      },
     transactions: {
       accepted: transactions.filter((item) => item.status === "accepted").length,
-      pending: transactions.filter((item) => item.status === "pending").length,
+      pending: pendingCount,
       succeeded: transactions.filter((item) => item.status === "succeeded").length,
       failed: failedTransactions,
     },

@@ -1,8 +1,11 @@
 import { TransactionExplorer } from "@/components/transactions/transaction-explorer";
+import { listStoredTransactions } from "@/lib/repositories/telemetry-store";
 import { getTransactions } from "@/lib/repositories/runtime-store";
+import type { TransactionRecord } from "@/types/gateway";
 
-export default function TransactionsPage() {
-  const transactions = getTransactions();
+export default async function TransactionsPage() {
+  const transactions: TransactionRecord[] =
+    (await listStoredTransactions().catch(() => null)) ?? getTransactions();
   return (
     <div className="space-y-6">
       <div>

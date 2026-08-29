@@ -19,6 +19,8 @@ const baseEnv = {
   MPESA_BILL_MANAGER_EMAIL: "billing@zadhron.com",
   MPESA_BILL_MANAGER_OFFICIAL_CONTACT: "254722000000",
   MPESA_PULL_TRANSACTIONS_NOMINATED_NUMBER: "254733000000",
+  SUPABASE_SERVICE_ROLE_KEY: "",
+  SUPABASE_SERVICE_KEY: "",
   HTTP_CONNECT_TIMEOUT: "5",
   HTTP_READ_TIMEOUT: "30",
   GATEWAY_APPLICATIONS_JSON: "[]",
@@ -37,6 +39,7 @@ describe("M-Pesa gateway", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -347,6 +350,109 @@ describe("M-Pesa gateway", () => {
     expect(response).toEqual({ ResultCode: 0, ResultDesc: "Accepted" });
     expect(getCallbacks()[0]?.callbackName).toBe("billManager");
     expect(getRequestLogs()[0]?.providerStatus).toBe("accepted");
+  });
+
+  test("exposes latest known shortcode balance from account balance callbacks", async () => {
+    const { processMpesaCallback, getGatewayOverview } = await import("@/services/mpesa/service");
+
+    await processMpesaCallback(
+      "accountBalanceResult",
+      {
+        Result: {
+          ResultCode: 0,
+          ResultDesc: "The service request is processed successfully.",
+          ResultParameters: {
+            ResultParameter: [
+              {
+                Key: "AccountBalance",
+                Value:
+                  "Working Account|KES|0.00|0.00|0.00|0.00&Utility Account|KES|23.00|23.00|0.00|0.00",
+              },
+            ],
+          },
+        },
+      },
+      "127.0.0.1",
+    );
+
+    const overview = await getGatewayOverview();
+
+    expect(overview.shortcodeBalance).toMatchObject({
+      status: "available",
+      currency: "KES",
+      totalCurrent: 23,
+      totalAvailable: 23,
+      accountCount: 2,
+    });
+  });
+
+  test("summarizes persisted-style treasury metrics from callbacks and pending transactions", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-29T16:00:00.000Z"));
+
+    vi.doMock("@/lib/repositories/telemetry-store", () => ({
+      listStoredRequestLogs: async () => null,
+      listStoredTransactions: async () => null,
+      persistRequestLog: async () => undefined,
+      persistTransactionSnapshot: async () => undefined,
+    }));
+
+    const { processMpesaCallback, getGatewayOverview } = await import("@/services/mpesa/service");
+    const { upsertTransaction } = await import("@/lib/repositories/runtime-store");
+
+    upsertTransaction({
+      id: "pending-1",
+      requestId: "pending-1",
+      provider: "mpesa",
+      operation: "b2c",
+      applicationId: "admin-console",
+      status: "accepted",
+      amount: 75,
+      createdAt: "2026-08-29T14:00:00.000Z",
+      updatedAt: "2026-08-29T14:00:00.000Z",
+      requestPayload: { Amount: 75 },
+      responsePayload: { ResponseCode: "0" },
+      callbackPayloads: [],
+    });
+
+    await processMpesaCallback(
+      "stk",
+      {
+        Body: {
+          stkCallback: {
+            ResultCode: 0,
+            CallbackMetadata: {
+              Item: [
+                { Key: "Amount", Value: 150 },
+                { Key: "CheckoutRequestID", Value: "ws_CO_metric" },
+              ],
+            },
+          },
+        },
+      },
+      "127.0.0.1",
+    );
+
+    await processMpesaCallback(
+      "b2cResult",
+      {
+        Result: {
+          ResultCode: 0,
+          ResultParameters: {
+            ResultParameter: [{ Key: "TransactionAmount", Value: 40 }],
+          },
+        },
+      },
+      "127.0.0.1",
+    );
+
+    const overview = await getGatewayOverview();
+
+    expect(overview.collectionsToday).toBe(150);
+    expect(overview.payoutsToday).toBe(40);
+    expect(overview.netFlowToday).toBe(110);
+    expect(overview.transactions.pending).toBe(1);
+    expect(overview.oldestPendingMinutes).toBe(120);
   });
 
   test("ignores blank optional callback URL env vars", async () => {

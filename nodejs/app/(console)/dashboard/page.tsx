@@ -4,19 +4,51 @@ import { ProviderStatus } from "@/components/dashboard/provider-status";
 import { MetricCard } from "@/components/ui/metric-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { TransactionTable } from "@/components/transactions/transaction-table";
+import { listStoredCallbacks } from "@/lib/repositories/callback-store";
+import { listStoredRequestLogs, listStoredTransactions } from "@/lib/repositories/telemetry-store";
 import { getCallbacks, getRequestLogs, getTransactions } from "@/lib/repositories/runtime-store";
 import { getGatewayOverview } from "@/services/mpesa/service";
+import type { CallbackRecord, RequestLogRecord, TransactionRecord } from "@/types/gateway";
 
 function formatPercent(value: number) {
   return `${Math.round(value)}%`;
 }
 
+function formatCurrency(amount: number, currency = "KES") {
+  return new Intl.NumberFormat("en-KE", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+function formatAgeMinutes(value?: number) {
+  if (value === undefined) {
+    return "Unavailable";
+  }
+
+  if (value < 60) {
+    return `${value}m`;
+  }
+
+  const hours = Math.floor(value / 60);
+  const minutes = value % 60;
+  return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+}
+
 export default async function DashboardPage() {
-  const overview = await getGatewayOverview();
-  const callbacks = getCallbacks();
-  const transactions = getTransactions().slice(0, 6);
-  const requestLogs = getRequestLogs().slice(0, 6);
-  const allTransactions = getTransactions();
+  const [overview, storedCallbacks, storedTransactions, storedRequestLogs] = await Promise.all([
+    getGatewayOverview(),
+    listStoredCallbacks(25).catch(() => null),
+    listStoredTransactions(50).catch(() => null),
+    listStoredRequestLogs(25).catch(() => null),
+  ]);
+  const callbacks: CallbackRecord[] = storedCallbacks ?? getCallbacks();
+  const allTransactions: TransactionRecord[] = storedTransactions ?? getTransactions();
+  const allRequestLogs: RequestLogRecord[] = storedRequestLogs ?? getRequestLogs();
+  const requestLogs = allRequestLogs.slice(0, 6);
+  const transactions = allTransactions.slice(0, 6);
   const totalTransactions = allTransactions.length;
   const successfulTransactions = overview.transactions.succeeded;
   const successRate = totalTransactions
@@ -25,8 +57,32 @@ export default async function DashboardPage() {
   const activeApplications = new Set(allTransactions.map((item) => item.applicationId)).size;
   const mostRecentTransaction = allTransactions[0];
   const latestCallback = callbacks[0];
-  const slowRequests = requestLogs.filter((log) => log.latencyMs >= 1000).length;
-  const requestFailureCount = requestLogs.filter((log) => log.status >= 400).length;
+  const slowRequests = allRequestLogs.filter((log) => log.latencyMs >= 1000).length;
+  const requestFailureCount = allRequestLogs.filter((log) => log.status >= 400).length;
+  const shortcodeBalanceValue =
+    overview.shortcodeBalance.status === "available"
+      ? formatCurrency(
+          overview.shortcodeBalance.totalCurrent ?? overview.shortcodeBalance.totalAvailable ?? 0,
+          overview.shortcodeBalance.currency,
+        )
+      : "Unavailable";
+  const shortcodeBalanceHint =
+    overview.shortcodeBalance.status === "available"
+      ? `Available now: ${formatCurrency(
+          overview.shortcodeBalance.totalAvailable ?? overview.shortcodeBalance.totalCurrent ?? 0,
+          overview.shortcodeBalance.currency,
+        )} across ${overview.shortcodeBalance.accountCount} ledger${overview.shortcodeBalance.accountCount === 1 ? "" : "s"}. Updated ${new Date(
+          overview.shortcodeBalance.updatedAt ?? "",
+        ).toLocaleString()}.`
+      : "Run an Account Balance query and wait for the callback to capture the latest known shortcode holdings.";
+  const balanceFreshnessHint =
+    overview.balanceFreshnessMinutes !== undefined
+      ? `Last successful balance callback was ${formatAgeMinutes(overview.balanceFreshnessMinutes)} ago.`
+      : "No successful account-balance callback has been stored yet.";
+  const oldestPendingHint =
+    overview.oldestPendingMinutes !== undefined
+      ? `Oldest pending transaction has been waiting ${formatAgeMinutes(overview.oldestPendingMinutes)}.`
+      : "No pending transactions are currently open.";
   const operationMix = Object.entries(
     allTransactions.reduce<Record<string, number>>((accumulator, transaction) => {
       accumulator[transaction.operation] = (accumulator[transaction.operation] ?? 0) + 1;
@@ -91,7 +147,16 @@ export default async function DashboardPage() {
               Monitor transaction throughput, inspect callback intake, and spot degraded provider behavior before it impacts merchant traffic.
             </p>
 
-            <div className="mt-8 grid gap-4 md:grid-cols-3">
+            <div className="mt-8 grid gap-4 md:grid-cols-4">
+              <div className="rounded-[1.4rem] border border-white/10 bg-white/6 p-4">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-slate-300">Shortcode balance</div>
+                <div className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white">
+                  {shortcodeBalanceValue}
+                </div>
+                <div className="mt-2 text-sm text-slate-300/80">
+                  {shortcodeBalanceHint}
+                </div>
+              </div>
               <div className="rounded-[1.4rem] border border-white/10 bg-white/6 p-4">
                 <div className="text-[11px] uppercase tracking-[0.18em] text-slate-300">Success rate</div>
                 <div className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white">
@@ -151,11 +216,19 @@ export default async function DashboardPage() {
       </section>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Successful Transactions" value={overview.transactions.succeeded} hint="Completed successfully in the active runtime." />
+        <MetricCard label="Collections Today" value={formatCurrency(overview.collectionsToday)} hint="Successful inbound STK and C2B collections recorded today." />
+        <MetricCard label="Payouts Today" value={formatCurrency(overview.payoutsToday)} hint="Successful outbound B2C and B2B payouts recorded today." />
+        <MetricCard label="Net Flow Today" value={formatCurrency(overview.netFlowToday)} hint="Collections minus payouts for today." />
+        <MetricCard label="Balance Freshness" value={formatAgeMinutes(overview.balanceFreshnessMinutes)} hint={balanceFreshnessHint} />
+        <MetricCard label="Oldest Pending" value={formatAgeMinutes(overview.oldestPendingMinutes)} hint={oldestPendingHint} />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <MetricCard label="Successful Transactions" value={overview.transactions.succeeded} hint="Completed successfully in persisted or runtime telemetry." />
         <MetricCard label="Pending Transactions" value={overview.transactions.pending} hint="Awaiting callback or downstream confirmation." />
         <MetricCard label="Failed Transactions" value={overview.transactions.failed} hint="Provider, validation, or execution failures." />
         <MetricCard label="Callbacks Received" value={overview.callbackCount} hint="Inbound callback deliveries accepted by the gateway." />
-        <MetricCard label="Failed Requests" value={requestFailureCount} hint="HTTP 4xx/5xx request activity in the recent request window." />
+        <MetricCard label="Failed Requests" value={requestFailureCount} hint="HTTP 4xx/5xx request activity in recent telemetry." />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
@@ -170,7 +243,7 @@ export default async function DashboardPage() {
             <div>
               <h2 className="text-lg font-semibold text-white">Gateway Mix</h2>
               <p className="mt-1 text-sm text-[var(--text-muted)]">
-                Most frequently observed operations in the current runtime window.
+                Most frequently observed operations in the available telemetry window.
               </p>
             </div>
             <div className="text-sm text-[var(--text-muted)]">{totalTransactions} total tx</div>
@@ -198,7 +271,7 @@ export default async function DashboardPage() {
               })
             ) : (
               <p className="text-sm text-[var(--text-muted)]">
-                Operation mix will populate once the runtime starts handling live gateway traffic.
+                Operation mix will populate once telemetry starts capturing live gateway traffic.
               </p>
             )}
           </div>
@@ -224,10 +297,10 @@ export default async function DashboardPage() {
         <section className="panel rounded-[1.5rem] p-6">
           <div>
             <h2 className="text-lg font-semibold text-white">Operational Activity</h2>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">
-              Most recent transaction, callback, and request events seen by this deployment.
-            </p>
-          </div>
+              <p className="mt-1 text-sm text-[var(--text-muted)]">
+                Most recent transaction, callback, and request events seen in stored telemetry.
+              </p>
+            </div>
 
           <div className="mt-5 space-y-4">
             {activityFeed.length ? (
