@@ -23,6 +23,17 @@ async function parseJsonResponse(response: Response) {
   }
 }
 
+function isInvalidAccessTokenResponse(response: Response, data: Record<string, unknown>) {
+  const providerCode = String(extractProviderCode(data) ?? "");
+  const providerMessage = String(extractProviderMessage(data) ?? "").toLowerCase();
+
+  return (
+    response.status === 401 ||
+    providerCode === "404.001.03" ||
+    providerMessage.includes("invalid access token")
+  );
+}
+
 async function sendAuthorizedRequest(
   path: string,
   payload: Record<string, unknown>,
@@ -52,7 +63,7 @@ async function sendAuthorizedRequest(
   }
 
   const data = await parseJsonResponse(response);
-  if (response.status === 401 && retryOn401) {
+  if (isInvalidAccessTokenResponse(response, data) && retryOn401) {
     clearAccessToken();
     return sendAuthorizedRequest(path, payload, false);
   }

@@ -1,3 +1,4 @@
+import { EndpointTester } from "@/components/payments/endpoint-tester";
 import { operationCatalog } from "@/lib/gateway/catalog";
 import { getGatewayConfig } from "@/lib/mpesa/config";
 import { ProviderStatus } from "@/components/dashboard/provider-status";
@@ -50,6 +51,22 @@ export default async function MpesaPage() {
               <div className="mono mt-3 text-xs text-slate-300">{operation.method} {operation.route}</div>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="panel rounded-sm p-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Test Supported Operations</h2>
+            <p className="mt-2 max-w-3xl text-sm text-[var(--text-muted)]">
+              Select any supported M-Pesa operation, send a request from the admin session, and
+              inspect the normalized response without leaving this page.
+            </p>
+          </div>
+          <StatusBadge value="accepted" />
+        </div>
+        <div className="mt-6">
+          <EndpointTester operations={operationCatalog} />
         </div>
       </section>
     </div>

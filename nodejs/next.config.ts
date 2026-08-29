@@ -14,7 +14,22 @@ function getSupabaseOrigin() {
   }
 }
 
+function getAllowedDevOrigins() {
+  const configuredOrigins = (process.env.ALLOWED_DEV_ORIGINS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return Array.from(
+    new Set([
+      "weathered-haze-72159.pktriot.xyz",
+      ...configuredOrigins,
+    ]),
+  );
+}
+
 const supabaseOrigin = getSupabaseOrigin();
+const allowedDevOrigins = getAllowedDevOrigins();
 const connectSrc = [
   "'self'",
   "https://sandbox.safaricom.co.ke",
@@ -47,6 +62,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins,
   poweredByHeader: false,
   reactStrictMode: true,
   async headers() {

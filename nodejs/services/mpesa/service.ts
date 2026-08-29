@@ -100,6 +100,92 @@ function inferTransactionId(payload: Record<string, unknown>) {
   return typeof payload.TransactionID === "string" ? payload.TransactionID : undefined;
 }
 
+function trimObjectString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function buildBillManagerOptinPayload(input: Record<string, unknown>) {
+  const config = getGatewayConfig();
+  const payload: Record<string, unknown> = {
+    shortcode: config.shortcode,
+    email: config.billManagerEmail,
+    officialContact: config.billManagerOfficialContact,
+    sendReminders: config.billManagerSendReminders,
+    logo: config.billManagerLogo,
+    callbackurl: config.legacyCallbackUrls.billManager,
+    ...input,
+  };
+
+  payload.shortcode = trimObjectString(payload.shortcode);
+  payload.email = trimObjectString(payload.email);
+  payload.officialContact = trimObjectString(payload.officialContact);
+  payload.callbackurl = trimObjectString(payload.callbackurl);
+
+  if (!payload.shortcode) {
+    throw new GatewayValidationError("MPESA_SHORTCODE is required for Bill Manager opt-in");
+  }
+
+  if (!payload.email) {
+    throw new GatewayValidationError("MPESA_BILL_MANAGER_EMAIL is required for Bill Manager opt-in");
+  }
+
+  if (!payload.officialContact) {
+    throw new GatewayValidationError(
+      "MPESA_BILL_MANAGER_OFFICIAL_CONTACT is required for Bill Manager opt-in",
+    );
+  }
+
+  if (!payload.callbackurl) {
+    throw new GatewayValidationError(
+      "MPESA_BILL_MANAGER_CALLBACK_URL or PUBLIC_BASE_URL is required for Bill Manager opt-in",
+    );
+  }
+
+  return payload;
+}
+
+function buildPullTransactionsRegistrationPayload(input: Record<string, unknown>) {
+  const config = getGatewayConfig();
+  const payload: Record<string, unknown> = {
+    ShortCode: config.shortcode,
+    RequestType: config.pullTransactionsRequestType,
+    NominatedNumber: config.pullTransactionsNominatedNumber,
+    CallBackURL: config.legacyCallbackUrls.pullTransactions,
+    ...input,
+  };
+
+  payload.ShortCode = trimObjectString(payload.ShortCode);
+  payload.RequestType = trimObjectString(payload.RequestType) ?? "Pull";
+  payload.NominatedNumber = trimObjectString(payload.NominatedNumber);
+  payload.CallBackURL = trimObjectString(payload.CallBackURL);
+
+  if (!payload.ShortCode) {
+    throw new GatewayValidationError("MPESA_SHORTCODE is required for pull transactions registration");
+  }
+
+  if (!payload.CallBackURL) {
+    throw new GatewayValidationError(
+      "MPESA_PULL_TRANSACTIONS_CALLBACK_URL or PUBLIC_BASE_URL is required for pull transactions registration",
+    );
+  }
+
+  if (!payload.NominatedNumber) {
+    throw new GatewayValidationError(
+      "MPESA_PULL_TRANSACTIONS_NOMINATED_NUMBER is required for pull transactions registration",
+    );
+  }
+
+  return payload;
+}
+
+function unwrapNestedPayload(input: Record<string, unknown>) {
+  if ("payload" in input && input.payload && typeof input.payload === "object") {
+    return { ...(input.payload as Record<string, unknown>) };
+  }
+
+  return { ...input };
+}
+
 function buildTransactionRecord(
   operation: MpesaOperation,
   context: GatewayRequestContext,
@@ -431,6 +517,41 @@ function preparePayload(operation: MpesaOperation, input: Record<string, unknown
         path: resolveMpesaPath(config.billManagerPath, input.pathOverride as string | undefined),
         requestPayload: { ...(input.payload as Record<string, unknown>) },
       };
+    case "billManagerOptin":
+      return {
+        path: config.billManagerOptinPath,
+        requestPayload: buildBillManagerOptinPayload(input),
+      };
+    case "billManagerChangeOptinDetails":
+      return {
+        path: config.billManagerChangeOptinDetailsPath,
+        requestPayload: buildBillManagerOptinPayload(input),
+      };
+    case "billManagerCreateSingleInvoice":
+      return {
+        path: config.billManagerCreateSingleInvoicePath,
+        requestPayload: unwrapNestedPayload(input),
+      };
+    case "billManagerCreateBulkInvoices":
+      return {
+        path: config.billManagerCreateBulkInvoicesPath,
+        requestPayload: unwrapNestedPayload(input),
+      };
+    case "billManagerCancelSingleInvoice":
+      return {
+        path: config.billManagerCancelSingleInvoicePath,
+        requestPayload: { ...input },
+      };
+    case "billManagerCancelBulkInvoices":
+      return {
+        path: config.billManagerCancelBulkInvoicesPath,
+        requestPayload: { ...input },
+      };
+    case "billManagerReconciliation":
+      return {
+        path: config.billManagerReconciliationPath,
+        requestPayload: unwrapNestedPayload(input),
+      };
     case "pullTransactions":
       return {
         path: resolveMpesaPath(
@@ -438,6 +559,16 @@ function preparePayload(operation: MpesaOperation, input: Record<string, unknown
           input.pathOverride as string | undefined,
         ),
         requestPayload: { ...(input.payload as Record<string, unknown>) },
+      };
+    case "pullTransactionsQuery":
+      return {
+        path: config.pullTransactionsQueryPath,
+        requestPayload: { ...input },
+      };
+    case "pullTransactionsRegister":
+      return {
+        path: config.pullTransactionsRegisterPath,
+        requestPayload: buildPullTransactionsRegistrationPayload(input),
       };
     case "mobileNumberValidation":
       return {
@@ -600,6 +731,10 @@ function statusFromCallback(callbackName: CallbackName, payload: Record<string, 
   }
 
   const resultCode = payload.ResultCode;
+  if (resultCode === undefined || resultCode === null || resultCode === "") {
+    return "accepted";
+  }
+
   if (resultCode === 0 || resultCode === "0") {
     return "succeeded";
   }

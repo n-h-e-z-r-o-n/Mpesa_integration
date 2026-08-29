@@ -61,6 +61,37 @@ function toValidationError(error: ZodError) {
   });
 }
 
+function operationForCallback(callbackName: CallbackName): MpesaOperation {
+  switch (callbackName) {
+    case "stk":
+      return "stkPush";
+    case "c2bConfirmation":
+    case "c2bValidation":
+      return "c2bRegister";
+    case "b2cResult":
+    case "b2cTimeout":
+      return "b2c";
+    case "b2bResult":
+    case "b2bTimeout":
+      return "b2b";
+    case "transactionStatusResult":
+    case "transactionStatusTimeout":
+      return "transactionStatus";
+    case "reversalResult":
+    case "reversalTimeout":
+      return "reversal";
+    case "accountBalanceResult":
+    case "accountBalanceTimeout":
+      return "accountBalance";
+    case "pullTransactions":
+      return "pullTransactions";
+    case "billManager":
+      return "billManager";
+    case "ratiba":
+      return "ratiba";
+  }
+}
+
 export async function handleApplicationOperation(request: NextRequest, operation: MpesaOperation) {
   const requestId = createRequestId();
   const startedAt = Date.now();
@@ -213,6 +244,7 @@ export async function handleAdminOperation(request: NextRequest, operation: Mpes
 
 export async function handleMpesaCallback(request: NextRequest, callbackName: CallbackName) {
   const requestId = createRequestId();
+  const operation = operationForCallback(callbackName);
 
   try {
     ensureCallbackSourceAllowed(request);
@@ -229,7 +261,7 @@ export async function handleMpesaCallback(request: NextRequest, callbackName: Ca
   } catch (error) {
     const normalized = normalizeError(
       error,
-      "ratiba",
+      operation,
       {
         requestId,
         applicationId: "safaricom",

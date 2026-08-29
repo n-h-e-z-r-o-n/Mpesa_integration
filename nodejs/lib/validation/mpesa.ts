@@ -54,6 +54,10 @@ export const businessToPochiSchema = z.object({
 
 const pathOverrideSchema = z.string().trim().startsWith("/").optional();
 
+function isPullTransactionsDateTime(value: string) {
+  return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value);
+}
+
 function nonEmptyPayloadSchema(message: string) {
   return z.record(z.string(), z.unknown()).refine((value) => Object.keys(value).length > 0, {
     message,
@@ -70,10 +74,57 @@ export const billManagerSchema = z.object({
   pathOverride: pathOverrideSchema,
 });
 
+export const billManagerOptinSchema = z
+  .object({
+    shortcode: z.string().optional(),
+    email: z.string().optional(),
+    officialContact: z.string().optional(),
+    sendReminders: z.coerce.number().int().optional(),
+    logo: z.string().optional(),
+    callbackurl: z.string().url().optional(),
+  })
+  .default({});
+
+export const billManagerCreateSingleInvoiceSchema = nonEmptyPayloadSchema(
+  "Bill Manager single invoice payload cannot be empty",
+);
+
+export const billManagerCreateBulkInvoicesSchema = z.object({
+  invoices: z.array(z.record(z.string(), z.unknown())).min(1),
+});
+
+export const billManagerCancelInvoiceSchema = z.object({
+  externalReference: z.string().min(1),
+});
+
+export const billManagerReconciliationSchema = nonEmptyPayloadSchema(
+  "Bill Manager reconciliation payload cannot be empty",
+);
+
 export const pullTransactionsSchema = z.object({
   payload: nonEmptyPayloadSchema("Pull Transactions payload cannot be empty"),
   pathOverride: pathOverrideSchema,
 });
+
+export const pullTransactionsQuerySchema = z.object({
+  ShortCode: z.string().min(1),
+  StartDate: z.string().refine(isPullTransactionsDateTime, {
+    message: "Pull Transactions dates must use format YYYY-MM-DD HH:MM:SS",
+  }),
+  EndDate: z.string().refine(isPullTransactionsDateTime, {
+    message: "Pull Transactions dates must use format YYYY-MM-DD HH:MM:SS",
+  }),
+  OffSetValue: z.string().default("0"),
+});
+
+export const pullTransactionsRegisterSchema = z
+  .object({
+    ShortCode: z.string().optional(),
+    RequestType: z.string().optional(),
+    NominatedNumber: z.string().optional(),
+    CallBackURL: z.string().url().optional(),
+  })
+  .default({});
 
 export const mobileNumberValidationSchema = z.object({
   payload: nonEmptyPayloadSchema("Mobile Number Validation payload cannot be empty"),
@@ -121,7 +172,16 @@ export const schemaByOperation = {
   businessToPochi: businessToPochiSchema,
   dynamicQrCode: dynamicQrCodeSchema,
   billManager: billManagerSchema,
+  billManagerOptin: billManagerOptinSchema,
+  billManagerChangeOptinDetails: billManagerOptinSchema,
+  billManagerCreateSingleInvoice: billManagerCreateSingleInvoiceSchema,
+  billManagerCreateBulkInvoices: billManagerCreateBulkInvoicesSchema,
+  billManagerCancelSingleInvoice: billManagerCancelInvoiceSchema,
+  billManagerCancelBulkInvoices: billManagerCancelInvoiceSchema,
+  billManagerReconciliation: billManagerReconciliationSchema,
   pullTransactions: pullTransactionsSchema,
+  pullTransactionsQuery: pullTransactionsQuerySchema,
+  pullTransactionsRegister: pullTransactionsRegisterSchema,
   mobileNumberValidation: mobileNumberValidationSchema,
   transactionStatus: transactionStatusSchema,
   reversal: reversalSchema,

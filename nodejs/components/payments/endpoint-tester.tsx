@@ -48,7 +48,7 @@ export function EndpointTester({ operations }: Props) {
           if (field.type === "number") {
             return [field.name, Number(rawValue)];
           }
-          if (field.name === "payload") {
+          if (field.type === "textarea") {
             try {
               return [field.name, JSON.parse(rawValue)];
             } catch {

@@ -55,6 +55,7 @@ Important:
 - `GATEWAY_APPLICATIONS_JSON` configures consuming Zadhron applications and scopes
 - `MPESA_SECURITY_CREDENTIAL` can be provided directly
 - or the app can derive it from `MPESA_INITIATOR_PASSWORD` and `MPESA_CERTIFICATE_PATH`
+- `SUPABASE_SERVICE_ROLE_KEY` is required if you want Safaricom callbacks persisted to the database
 
 ## Scripts
 
@@ -70,4 +71,5 @@ npm run build
 
 - Runtime logs, transactions, callbacks, and idempotency records are currently in-memory only
 - Persistence boundaries are intentionally isolated for later PostgreSQL or Supabase integration
+- Callback rows are only written to Supabase `provider_events` when `SUPABASE_SERVICE_ROLE_KEY` is configured
 - The Python implementation remains untouched as the reference behavior source

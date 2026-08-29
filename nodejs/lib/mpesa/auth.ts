@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 
 import { getGatewayConfig } from "@/lib/mpesa/config";
 import { MpesaAuthenticationError } from "@/lib/mpesa/errors";
@@ -6,6 +7,7 @@ import { MpesaAuthenticationError } from "@/lib/mpesa/errors";
 type TokenState = {
   accessToken?: string;
   expiresAt?: number;
+  cacheKey?: string;
   inFlight?: Promise<string>;
 };
 
@@ -25,11 +27,27 @@ export function clearAccessToken() {
   const state = getTokenState();
   state.accessToken = undefined;
   state.expiresAt = undefined;
+  state.cacheKey = undefined;
   state.inFlight = undefined;
+}
+
+function buildTokenCacheKey() {
+  const config = getGatewayConfig();
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        authPath: config.authPath,
+        consumerKey: config.consumerKey,
+        consumerSecret: config.consumerSecret,
+        mpesaBaseUrl: config.mpesaBaseUrl,
+      }),
+    )
+    .digest("hex");
 }
 
 async function fetchAccessToken() {
   const config = getGatewayConfig();
+  const cacheKey = buildTokenCacheKey();
   const url = `${config.mpesaBaseUrl.replace(/\/$/, "")}${config.authPath}`;
   const credentials = Buffer.from(`${config.consumerKey}:${config.consumerSecret}`, "utf8").toString(
     "base64",
@@ -82,11 +100,17 @@ async function fetchAccessToken() {
   const state = getTokenState();
   state.accessToken = accessToken;
   state.expiresAt = Date.now() + Math.max(0, expiresIn - 60) * 1000;
+  state.cacheKey = cacheKey;
   return accessToken;
 }
 
 export async function getAccessToken() {
   const state = getTokenState();
+  const cacheKey = buildTokenCacheKey();
+  if (state.cacheKey && state.cacheKey !== cacheKey) {
+    clearAccessToken();
+  }
+
   if (state.accessToken && state.expiresAt && Date.now() < state.expiresAt) {
     return state.accessToken;
   }

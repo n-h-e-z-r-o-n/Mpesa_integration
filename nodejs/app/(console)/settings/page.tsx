@@ -1,5 +1,6 @@
 import { JsonViewer } from "@/components/ui/json-viewer";
 import { getGatewayConfig } from "@/lib/mpesa/config";
+import { hasSupabaseAdminAccess } from "@/lib/repositories/callback-store";
 
 export default function SettingsPage() {
   const config = getGatewayConfig();
@@ -24,6 +25,9 @@ export default function SettingsPage() {
               mpesaBaseUrl: config.mpesaBaseUrl,
               callbackBaseUrl: config.callbackBaseUrl,
               callbackUrls: config.callbackUrls,
+              callbackPersistence: hasSupabaseAdminAccess()
+                ? "database-enabled"
+                : "runtime-only: SUPABASE_SERVICE_ROLE_KEY missing",
               hasInitiatorName: Boolean(config.initiatorName),
               hasInitiatorPassword: Boolean(config.initiatorPassword),
               hasSecurityCredential: Boolean(config.securityCredential),

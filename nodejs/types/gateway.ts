@@ -11,7 +11,16 @@ export type MpesaOperation =
   | "businessToPochi"
   | "dynamicQrCode"
   | "billManager"
+  | "billManagerOptin"
+  | "billManagerChangeOptinDetails"
+  | "billManagerCreateSingleInvoice"
+  | "billManagerCreateBulkInvoices"
+  | "billManagerCancelSingleInvoice"
+  | "billManagerCancelBulkInvoices"
+  | "billManagerReconciliation"
   | "pullTransactions"
+  | "pullTransactionsQuery"
+  | "pullTransactionsRegister"
   | "mobileNumberValidation"
   | "transactionStatus"
   | "reversal"
@@ -32,7 +41,9 @@ export type CallbackName =
   | "reversalTimeout"
   | "accountBalanceResult"
   | "accountBalanceTimeout"
-  | "ratiba";
+  | "ratiba"
+  | "pullTransactions"
+  | "billManager";
 
 export type TransactionStatus =
   | "accepted"

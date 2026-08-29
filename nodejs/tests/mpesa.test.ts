@@ -16,6 +16,9 @@ const baseEnv = {
   MPESA_PASSKEY: "passkey",
   MPESA_INITIATOR_NAME: "testapi",
   MPESA_SECURITY_CREDENTIAL: "credential",
+  MPESA_BILL_MANAGER_EMAIL: "billing@zadhron.com",
+  MPESA_BILL_MANAGER_OFFICIAL_CONTACT: "254722000000",
+  MPESA_PULL_TRANSACTIONS_NOMINATED_NUMBER: "254733000000",
   HTTP_CONNECT_TIMEOUT: "5",
   HTTP_READ_TIMEOUT: "30",
   GATEWAY_APPLICATIONS_JSON: "[]",
@@ -56,6 +59,37 @@ describe("M-Pesa gateway", () => {
     expect(first).toBe("cached-token");
     expect(second).toBe("cached-token");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("refreshes the cached OAuth token when M-Pesa config changes", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "token-a", expires_in: 3600 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "token-b", expires_in: 3600 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { getAccessToken } = await import("@/lib/mpesa/auth");
+    const { resetGatewayConfigForTests } = await import("@/lib/mpesa/config");
+
+    const first = await getAccessToken();
+    process.env.MPESA_CONSUMER_KEY = "consumer-key-rotated";
+    resetGatewayConfigForTests();
+    const second = await getAccessToken();
+
+    expect(first).toBe("token-a");
+    expect(second).toBe("token-b");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   test("builds STK payloads from the Python-compatible rules", async () => {
@@ -216,5 +250,265 @@ describe("M-Pesa gateway", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1]?.[0]).toBe("https://sandbox.safaricom.co.ke/pulltransactions/v1/register");
+  });
+
+  test("builds Bill Manager opt-in payloads from environment defaults", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "token-3", expires_in: 3600 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ResponseCode: "0", ResponseDescription: "Accepted" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { executeMpesaOperation } = await import("@/services/mpesa/service");
+    await executeMpesaOperation(
+      "billManagerOptin",
+      {},
+      {
+        requestId: "req-4",
+        applicationId: "admin-console",
+        route: "/api/mpesa/bill-manager/optin",
+        method: "POST",
+        startedAt: Date.now(),
+      },
+    );
+
+    const init = fetchMock.mock.calls[1]?.[1] as RequestInit;
+    const payload = JSON.parse(String(init.body)) as Record<string, string | number>;
+
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("https://sandbox.safaricom.co.ke/v1/billmanager-invoice/optin");
+    expect(payload.shortcode).toBe("174379");
+    expect(payload.email).toBe("billing@zadhron.com");
+    expect(payload.officialContact).toBe("254722000000");
+    expect(payload.callbackurl).toBe("https://payments.zadhron.com/callbacks/payments/bill-manager");
+  });
+
+  test("builds Pull Transactions registration payloads from environment defaults", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "token-4", expires_in: 3600 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ResponseCode: "0", ResponseDescription: "Accepted" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { executeMpesaOperation } = await import("@/services/mpesa/service");
+    await executeMpesaOperation(
+      "pullTransactionsRegister",
+      {},
+      {
+        requestId: "req-5",
+        applicationId: "admin-console",
+        route: "/api/mpesa/pull-transactions/register",
+        method: "POST",
+        startedAt: Date.now(),
+      },
+    );
+
+    const init = fetchMock.mock.calls[1]?.[1] as RequestInit;
+    const payload = JSON.parse(String(init.body)) as Record<string, string>;
+
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("https://sandbox.safaricom.co.ke/pulltransactions/v1/register");
+    expect(payload.ShortCode).toBe("174379");
+    expect(payload.RequestType).toBe("Pull");
+    expect(payload.NominatedNumber).toBe("254733000000");
+    expect(payload.CallBackURL).toBe("https://payments.zadhron.com/callbacks/payments/pull-transactions");
+  });
+
+  test("treats callback payloads without ResultCode as accepted", async () => {
+    const { processMpesaCallback } = await import("@/services/mpesa/service");
+    const response = await processMpesaCallback(
+      "billManager",
+      { invoice: "INV-1001", status: "received" },
+      "127.0.0.1",
+    );
+
+    const { getRequestLogs, getCallbacks } = await import("@/lib/repositories/runtime-store");
+
+    expect(response).toEqual({ ResultCode: 0, ResultDesc: "Accepted" });
+    expect(getCallbacks()[0]?.callbackName).toBe("billManager");
+    expect(getRequestLogs()[0]?.providerStatus).toBe("accepted");
+  });
+
+  test("ignores blank optional callback URL env vars", async () => {
+    process.env.MPESA_BILL_MANAGER_CALLBACK_URL = "   ";
+    process.env.MPESA_PULL_TRANSACTIONS_CALLBACK_URL = "";
+
+    const { resetGatewayConfigForTests, getGatewayConfig } = await import("@/lib/mpesa/config");
+    resetGatewayConfigForTests();
+
+    const config = getGatewayConfig();
+
+    expect(config.callbackUrls.billManager).toBe(
+      "https://payments.zadhron.com/api/mpesa/callbacks/bill-manager",
+    );
+    expect(config.legacyCallbackUrls.pullTransactions).toBe(
+      "https://payments.zadhron.com/callbacks/payments/pull-transactions",
+    );
+  });
+
+  test("normalizes root-relative callback override env vars", async () => {
+    process.env.MPESA_BILL_MANAGER_CALLBACK_URL = "/callbacks/payments/bill-manager";
+    process.env.MPESA_PULL_TRANSACTIONS_CALLBACK_URL = "/callbacks/payments/pull-transactions";
+
+    const { resetGatewayConfigForTests, getGatewayConfig } = await import("@/lib/mpesa/config");
+    resetGatewayConfigForTests();
+
+    const config = getGatewayConfig();
+
+    expect(config.callbackUrls.billManager).toBe(
+      "https://payments.zadhron.com/callbacks/payments/bill-manager",
+    );
+    expect(config.callbackUrls.pullTransactions).toBe(
+      "https://payments.zadhron.com/callbacks/payments/pull-transactions",
+    );
+  });
+
+  test("normalizes bare hostname callback base URLs", async () => {
+    process.env.MPESA_CALLBACK_BASE_URL = "weathered-haze-72159.pktriot.xyz";
+
+    const { resetGatewayConfigForTests, getGatewayConfig } = await import("@/lib/mpesa/config");
+    resetGatewayConfigForTests();
+
+    const config = getGatewayConfig();
+
+    expect(config.callbackBaseUrl).toBe("https://weathered-haze-72159.pktriot.xyz");
+    expect(config.callbackUrls.stk).toBe(
+      "https://weathered-haze-72159.pktriot.xyz/api/mpesa/callbacks/stk",
+    );
+  });
+
+  test("uses configured C2B callback overrides instead of /api/mpesa callback paths", async () => {
+    process.env.MPESA_C2B_CONFIRMATION_URL = "/callbacks/payments/c2b/confirmation";
+    process.env.MPESA_C2B_VALIDATION_URL = "/callbacks/payments/c2b/validation";
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "token-5", expires_in: 3600 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ResponseCode: "0", ResponseDescription: "Accepted" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { resetGatewayConfigForTests } = await import("@/lib/mpesa/config");
+    resetGatewayConfigForTests();
+
+    const { executeMpesaOperation } = await import("@/services/mpesa/service");
+    await executeMpesaOperation(
+      "c2bRegister",
+      {},
+      {
+        requestId: "req-6",
+        applicationId: "admin-console",
+        route: "/api/mpesa/c2b/register",
+        method: "POST",
+        startedAt: Date.now(),
+      },
+    );
+
+    const init = fetchMock.mock.calls[1]?.[1] as RequestInit;
+    const payload = JSON.parse(String(init.body)) as Record<string, string>;
+
+    expect(payload.ConfirmationURL).toBe(
+      "https://payments.zadhron.com/callbacks/payments/c2b/confirmation",
+    );
+    expect(payload.ValidationURL).toBe(
+      "https://payments.zadhron.com/callbacks/payments/c2b/validation",
+    );
+  });
+
+  test("retries once when Safaricom returns invalid access token on STK push", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "token-old", expires_in: 3600 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            errorCode: "404.001.03",
+            errorMessage: "Invalid Access Token",
+          }),
+          {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "token-new", expires_in: 3600 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ResponseCode: "0",
+            ResponseDescription: "Success. Request accepted for processing",
+            MerchantRequestID: "mid-2",
+            CheckoutRequestID: "ws_CO_2",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { executeMpesaOperation } = await import("@/services/mpesa/service");
+    const result = await executeMpesaOperation(
+      "stkPush",
+      {
+        phoneNumber: "0714 415 034",
+        amount: 10,
+        accountReference: "INV1002",
+        transactionDesc: "Token retry",
+        transactionType: "CustomerPayBillOnline",
+      },
+      {
+        requestId: "req-7",
+        applicationId: "admin-console",
+        route: "/api/mpesa/stk-push",
+        method: "POST",
+        startedAt: Date.now(),
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });
