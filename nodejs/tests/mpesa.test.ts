@@ -41,6 +41,9 @@ describe("M-Pesa gateway", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    vi.doUnmock("@/lib/repositories/admin-dashboard-store");
+    vi.doUnmock("@/lib/repositories/callback-store");
+    vi.doUnmock("@/lib/repositories/telemetry-store");
   });
 
   test("caches OAuth tokens until expiry", async () => {
@@ -352,28 +355,94 @@ describe("M-Pesa gateway", () => {
     expect(getRequestLogs()[0]?.providerStatus).toBe("accepted");
   });
 
-  test("exposes latest known shortcode balance from account balance callbacks", async () => {
-    const { processMpesaCallback, getGatewayOverview } = await import("@/services/mpesa/service");
+  test("reconciles callbacks against persisted transactions when runtime memory is empty", async () => {
+    const persistTransactionSnapshot = vi.fn().mockResolvedValue(undefined);
+
+    vi.doMock("@/lib/repositories/telemetry-store", async () => {
+      const actual = await vi.importActual<typeof import("@/lib/repositories/telemetry-store")>(
+        "@/lib/repositories/telemetry-store",
+      );
+
+      return {
+        ...actual,
+        listStoredTransactions: async () => [
+          {
+            id: "ws_CO_persisted",
+            requestId: "req-persisted",
+            provider: "mpesa" as const,
+            operation: "stkPush" as const,
+            applicationId: "admin-console",
+            status: "pending" as const,
+            createdAt: "2026-08-29T18:10:00.000Z",
+            updatedAt: "2026-08-29T18:10:00.000Z",
+            requestPayload: { Amount: 125 },
+            responsePayload: { CheckoutRequestID: "ws_CO_persisted" },
+            callbackPayloads: [],
+          },
+        ],
+        persistRequestLog: async () => undefined,
+        persistTransactionSnapshot,
+      };
+    });
+
+    const { processMpesaCallback } = await import("@/services/mpesa/service");
 
     await processMpesaCallback(
-      "accountBalanceResult",
+      "stk",
       {
-        Result: {
-          ResultCode: 0,
-          ResultDesc: "The service request is processed successfully.",
-          ResultParameters: {
-            ResultParameter: [
-              {
-                Key: "AccountBalance",
-                Value:
-                  "Working Account|KES|0.00|0.00|0.00|0.00&Utility Account|KES|23.00|23.00|0.00|0.00",
-              },
-            ],
+        Body: {
+          stkCallback: {
+            CheckoutRequestID: "ws_CO_persisted",
+            ResultCode: 0,
+            CallbackMetadata: {
+              Item: [{ Key: "Amount", Value: 125 }],
+            },
           },
         },
       },
       "127.0.0.1",
     );
+
+    expect(persistTransactionSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "ws_CO_persisted",
+        status: "succeeded",
+      }),
+    );
+  });
+
+  test("exposes latest known shortcode balance from account balance callbacks", async () => {
+    vi.doMock("@/lib/repositories/admin-dashboard-store", () => ({
+      getAdminDashboardSnapshot: async () => ({
+        dashboardKey: "primary",
+        transactionProcessingCount: 0,
+        transactionPendingCount: 0,
+        transactionSucceededCount: 0,
+        transactionFailedCount: 0,
+        callbackCount: 1,
+        requestCount: 0,
+        failedRequestCount: 0,
+        slowRequestCount: 0,
+        activeApplicationCount: 0,
+        collectionsToday: 0,
+        payoutsToday: 0,
+        netFlowToday: 0,
+        balanceStatus: "available" as const,
+        balanceCurrency: "KES",
+        balanceTotalCurrent: 23,
+        balanceTotalAvailable: 23,
+        balanceAccountCount: 2,
+        latestTransactionAt: undefined,
+        latestCallbackAt: "2026-08-29T15:30:00.000Z",
+        latestRequestAt: undefined,
+        latestBalanceCallbackAt: "2026-08-29T15:30:00.000Z",
+        oldestPendingCreatedAt: undefined,
+        projectionUpdatedAt: "2026-08-29T15:31:00.000Z",
+        balanceAccounts: [],
+      }),
+    }));
+
+    const { getGatewayOverview } = await import("@/services/mpesa/service");
 
     const overview = await getGatewayOverview();
 
@@ -390,61 +459,37 @@ describe("M-Pesa gateway", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-29T16:00:00.000Z"));
 
-    vi.doMock("@/lib/repositories/telemetry-store", () => ({
-      listStoredRequestLogs: async () => null,
-      listStoredTransactions: async () => null,
-      persistRequestLog: async () => undefined,
-      persistTransactionSnapshot: async () => undefined,
+    vi.doMock("@/lib/repositories/admin-dashboard-store", () => ({
+      getAdminDashboardSnapshot: async () => ({
+        dashboardKey: "primary",
+        transactionProcessingCount: 1,
+        transactionPendingCount: 1,
+        transactionSucceededCount: 0,
+        transactionFailedCount: 0,
+        callbackCount: 2,
+        requestCount: 0,
+        failedRequestCount: 0,
+        slowRequestCount: 0,
+        activeApplicationCount: 1,
+        collectionsToday: 150,
+        payoutsToday: 40,
+        netFlowToday: 110,
+        balanceStatus: "unavailable" as const,
+        balanceCurrency: undefined,
+        balanceTotalCurrent: undefined,
+        balanceTotalAvailable: undefined,
+        balanceAccountCount: 0,
+        latestTransactionAt: "2026-08-29T15:20:00.000Z",
+        latestCallbackAt: "2026-08-29T15:20:00.000Z",
+        latestRequestAt: undefined,
+        latestBalanceCallbackAt: undefined,
+        oldestPendingCreatedAt: "2026-08-29T14:00:00.000Z",
+        projectionUpdatedAt: "2026-08-29T15:21:00.000Z",
+        balanceAccounts: [],
+      }),
     }));
 
-    const { processMpesaCallback, getGatewayOverview } = await import("@/services/mpesa/service");
-    const { upsertTransaction } = await import("@/lib/repositories/runtime-store");
-
-    upsertTransaction({
-      id: "pending-1",
-      requestId: "pending-1",
-      provider: "mpesa",
-      operation: "b2c",
-      applicationId: "admin-console",
-      status: "accepted",
-      amount: 75,
-      createdAt: "2026-08-29T14:00:00.000Z",
-      updatedAt: "2026-08-29T14:00:00.000Z",
-      requestPayload: { Amount: 75 },
-      responsePayload: { ResponseCode: "0" },
-      callbackPayloads: [],
-    });
-
-    await processMpesaCallback(
-      "stk",
-      {
-        Body: {
-          stkCallback: {
-            ResultCode: 0,
-            CallbackMetadata: {
-              Item: [
-                { Key: "Amount", Value: 150 },
-                { Key: "CheckoutRequestID", Value: "ws_CO_metric" },
-              ],
-            },
-          },
-        },
-      },
-      "127.0.0.1",
-    );
-
-    await processMpesaCallback(
-      "b2cResult",
-      {
-        Result: {
-          ResultCode: 0,
-          ResultParameters: {
-            ResultParameter: [{ Key: "TransactionAmount", Value: 40 }],
-          },
-        },
-      },
-      "127.0.0.1",
-    );
+    const { getGatewayOverview } = await import("@/services/mpesa/service");
 
     const overview = await getGatewayOverview();
 

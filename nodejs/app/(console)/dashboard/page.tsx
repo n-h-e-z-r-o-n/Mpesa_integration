@@ -6,7 +6,6 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { TransactionTable } from "@/components/transactions/transaction-table";
 import { listStoredCallbacks } from "@/lib/repositories/callback-store";
 import { listStoredRequestLogs, listStoredTransactions } from "@/lib/repositories/telemetry-store";
-import { getCallbacks, getRequestLogs, getTransactions } from "@/lib/repositories/runtime-store";
 import { getGatewayOverview } from "@/services/mpesa/service";
 import type { CallbackRecord, RequestLogRecord, TransactionRecord } from "@/types/gateway";
 
@@ -44,21 +43,23 @@ export default async function DashboardPage() {
     listStoredTransactions(50).catch(() => null),
     listStoredRequestLogs(25).catch(() => null),
   ]);
-  const callbacks: CallbackRecord[] = storedCallbacks ?? getCallbacks();
-  const allTransactions: TransactionRecord[] = storedTransactions ?? getTransactions();
-  const allRequestLogs: RequestLogRecord[] = storedRequestLogs ?? getRequestLogs();
+  const callbacks: CallbackRecord[] = storedCallbacks ?? [];
+  const allTransactions: TransactionRecord[] = storedTransactions ?? [];
+  const allRequestLogs: RequestLogRecord[] = storedRequestLogs ?? [];
   const requestLogs = allRequestLogs.slice(0, 6);
   const transactions = allTransactions.slice(0, 6);
-  const totalTransactions = allTransactions.length;
+  const totalTransactions =
+    allTransactions.length ||
+    (overview.transactions.pending + overview.transactions.succeeded + overview.transactions.failed);
   const successfulTransactions = overview.transactions.succeeded;
   const successRate = totalTransactions
     ? (successfulTransactions / totalTransactions) * 100
     : 0;
-  const activeApplications = new Set(allTransactions.map((item) => item.applicationId)).size;
+  const activeApplications = overview.activeApplicationCount;
   const mostRecentTransaction = allTransactions[0];
   const latestCallback = callbacks[0];
-  const slowRequests = allRequestLogs.filter((log) => log.latencyMs >= 1000).length;
-  const requestFailureCount = allRequestLogs.filter((log) => log.status >= 400).length;
+  const slowRequests = overview.slowRequestCount;
+  const requestFailureCount = overview.failedRequestCount;
   const shortcodeBalanceValue =
     overview.shortcodeBalance.status === "available"
       ? formatCurrency(
@@ -163,7 +164,7 @@ export default async function DashboardPage() {
                   {formatPercent(successRate)}
                 </div>
                 <div className="mt-2 text-sm text-slate-300/80">
-                  Based on {totalTransactions || 0} observed runtime transactions.
+                  Based on {totalTransactions || 0} persisted transactions.
                 </div>
               </div>
               <div className="rounded-[1.4rem] border border-white/10 bg-white/6 p-4">
@@ -172,7 +173,7 @@ export default async function DashboardPage() {
                   {activeApplications || 0}
                 </div>
                 <div className="mt-2 text-sm text-slate-300/80">
-                  Distinct gateway clients seen in this runtime window.
+                  Distinct gateway clients seen in persisted telemetry.
                 </div>
               </div>
               <div className="rounded-[1.4rem] border border-white/10 bg-white/6 p-4">
@@ -224,7 +225,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Successful Transactions" value={overview.transactions.succeeded} hint="Completed successfully in persisted or runtime telemetry." />
+        <MetricCard label="Successful Transactions" value={overview.transactions.succeeded} hint="Completed successfully in persisted telemetry." />
         <MetricCard label="Pending Transactions" value={overview.transactions.pending} hint="Awaiting callback or downstream confirmation." />
         <MetricCard label="Failed Transactions" value={overview.transactions.failed} hint="Provider, validation, or execution failures." />
         <MetricCard label="Callbacks Received" value={overview.callbackCount} hint="Inbound callback deliveries accepted by the gateway." />

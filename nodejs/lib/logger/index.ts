@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { persistAuditLog } from "@/lib/repositories/telemetry-store";
 import { addAuditLog } from "@/lib/repositories/runtime-store";
 
 const redactedKeys = [
@@ -43,12 +44,25 @@ export function logEvent(
   data?: Record<string, unknown>,
 ) {
   const sanitized = data ? sanitizeForLogs(data) : undefined;
-  addAuditLog({
+  const record = {
     id: randomUUID(),
     level,
     message,
     timestamp: new Date().toISOString(),
     data: sanitized,
+  };
+  addAuditLog(record);
+  void persistAuditLog(record).catch((error) => {
+    console.warn(
+      JSON.stringify({
+        level: "warn",
+        message: "Unable to persist audit log",
+        data: {
+          originalMessage: message,
+          error: error instanceof Error ? error.message : "unknown",
+        },
+      }),
+    );
   });
 
   const logger = level === "error" ? console.error : level === "warn" ? console.warn : console.info;

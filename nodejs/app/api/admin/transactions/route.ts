@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 
 import { getAdminSession } from "@/lib/auth/admin-session";
 import { listStoredTransactions } from "@/lib/repositories/telemetry-store";
-import { getTransactions } from "@/lib/repositories/runtime-store";
 
 export const runtime = "nodejs";
 
@@ -12,5 +11,5 @@ export async function GET() {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  return NextResponse.json((await listStoredTransactions().catch(() => null)) ?? getTransactions());
+  return NextResponse.json((await listStoredTransactions().catch(() => null)) ?? []);
 }

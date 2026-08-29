@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getAdminSession } from "@/lib/auth/admin-session";
-import { getAuditLogs } from "@/lib/repositories/runtime-store";
+import { listStoredAuditLogs } from "@/lib/repositories/telemetry-store";
 
 export const runtime = "nodejs";
 
@@ -11,5 +11,5 @@ export async function GET() {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  return NextResponse.json(getAuditLogs());
+  return NextResponse.json((await listStoredAuditLogs().catch(() => null)) ?? []);
 }

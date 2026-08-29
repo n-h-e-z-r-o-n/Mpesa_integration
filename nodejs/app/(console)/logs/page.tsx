@@ -1,14 +1,13 @@
 import { EmptyState } from "@/components/ui/empty-state";
 import { JsonViewer } from "@/components/ui/json-viewer";
-import { listStoredRequestLogs } from "@/lib/repositories/telemetry-store";
-import { getAuditLogs, getRequestLogs } from "@/lib/repositories/runtime-store";
+import { listStoredAuditLogs, listStoredRequestLogs } from "@/lib/repositories/telemetry-store";
 import type { RequestLogRecord } from "@/types/gateway";
 
 export default async function LogsPage() {
   const allRequestLogs: RequestLogRecord[] =
-    (await listStoredRequestLogs().catch(() => null)) ?? getRequestLogs();
+    (await listStoredRequestLogs().catch(() => null)) ?? [];
   const requestLogs = allRequestLogs.slice(0, 10);
-  const auditLogs = getAuditLogs().slice(0, 10);
+  const auditLogs = ((await listStoredAuditLogs(10).catch(() => null)) ?? []).slice(0, 10);
 
   return (
     <div className="space-y-6">

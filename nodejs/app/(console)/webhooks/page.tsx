@@ -2,10 +2,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { JsonViewer } from "@/components/ui/json-viewer";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { listStoredCallbacks } from "@/lib/repositories/callback-store";
-import { getCallbacks } from "@/lib/repositories/runtime-store";
 
 export default async function WebhooksPage() {
-  const callbacks = (await listStoredCallbacks().catch(() => null)) ?? getCallbacks();
+  const callbacks = (await listStoredCallbacks().catch(() => null)) ?? [];
   return (
     <div className="space-y-6">
       <div>

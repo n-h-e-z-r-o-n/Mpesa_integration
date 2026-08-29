@@ -2,12 +2,11 @@ import { AdminOperationsWorkspace } from "@/components/payments/admin-operations
 import { TransactionExplorer } from "@/components/transactions/transaction-explorer";
 import { adminOperatorOperations } from "@/lib/gateway/admin-operations";
 import { listStoredTransactions } from "@/lib/repositories/telemetry-store";
-import { getTransactions } from "@/lib/repositories/runtime-store";
 import type { TransactionRecord } from "@/types/gateway";
 
 export default async function WorkspacePage() {
   const transactions: TransactionRecord[] =
-    (await listStoredTransactions().catch(() => null)) ?? getTransactions();
+    (await listStoredTransactions().catch(() => null)) ?? [];
 
   return (
     <div className="space-y-6">

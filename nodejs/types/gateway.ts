@@ -173,12 +173,16 @@ export interface GatewayOverview {
   oauthHealthy: boolean;
   callbackCount: number;
   requestCount: number;
+  failedRequestCount: number;
+  slowRequestCount: number;
+  activeApplicationCount: number;
   recentFailures: number;
   collectionsToday: number;
   payoutsToday: number;
   netFlowToday: number;
   balanceFreshnessMinutes?: number;
   oldestPendingMinutes?: number;
+  projectionUpdatedAt?: string;
   shortcodeBalance: {
     status: "available" | "unavailable";
     currency?: string;

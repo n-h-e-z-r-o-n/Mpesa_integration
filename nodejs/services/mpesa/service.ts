@@ -20,14 +20,11 @@ import {
   sanitizeAlphaNumeric,
 } from "@/lib/mpesa/utils";
 import { logEvent, sanitizeForLogs } from "@/lib/logger";
+import { getAdminDashboardSnapshot } from "@/lib/repositories/admin-dashboard-store";
 import {
-  getLatestStoredCallback,
-  listStoredCallbacks,
-  listStoredCallbacksSince,
   persistCallbackRecord,
 } from "@/lib/repositories/callback-store";
 import {
-  listStoredRequestLogs,
   listStoredTransactions,
   persistRequestLog,
   persistTransactionSnapshot,
@@ -35,8 +32,6 @@ import {
 import {
   addCallback,
   addRequestLog,
-  getCallbacks,
-  getRequestLogs,
   getTransactions,
   upsertTransaction,
 } from "@/lib/repositories/runtime-store";
@@ -270,30 +265,6 @@ function buildLogRecord(
     requestBody: sanitizeForLogs(requestPayload),
     responseBody: sanitizeForLogs((response.data ?? response.error ?? {}) as Record<string, unknown>),
   };
-}
-
-function startOfTodayIso(reference = new Date()) {
-  const dayStart = new Date(reference);
-  dayStart.setHours(0, 0, 0, 0);
-  return dayStart.toISOString();
-}
-
-function readCallbackMetadataItems(payload: Record<string, unknown>) {
-  const callbackMetadata = payload.CallbackMetadata;
-  if (!callbackMetadata || typeof callbackMetadata !== "object") {
-    return [];
-  }
-
-  const items = (callbackMetadata as Record<string, unknown>).Item;
-  if (Array.isArray(items)) {
-    return items.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>;
-  }
-
-  if (items && typeof items === "object") {
-    return [items as Record<string, unknown>];
-  }
-
-  return [];
 }
 
 function normalizeSuccess(
@@ -758,221 +729,53 @@ function readCallbackPayload(payload: Record<string, unknown>) {
   return payload;
 }
 
-function readResultParameters(payload: Record<string, unknown>) {
-  const resultParameters = payload.ResultParameters;
-  if (!resultParameters || typeof resultParameters !== "object") {
-    return [];
+function minutesSince(timestamp?: string) {
+  if (!timestamp) {
+    return undefined;
   }
 
-  const parameters = (resultParameters as Record<string, unknown>).ResultParameter;
-  if (Array.isArray(parameters)) {
-    return parameters.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>;
+  const parsed = Date.parse(timestamp);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
   }
 
-  if (parameters && typeof parameters === "object") {
-    return [parameters as Record<string, unknown>];
-  }
-
-  return [];
+  return Math.max(0, Math.floor((Date.now() - parsed) / 60000));
 }
 
-function parseBalanceNumber(value: string) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function parseAmount(value: unknown) {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
-}
-
-function roundMoney(value: number) {
-  return Math.round(value * 100) / 100;
-}
-
-function extractShortcodeBalance(record?: { callbackName: CallbackName; payload: Record<string, unknown>; receivedAt: string } | null) {
-  if (!record || record.callbackName !== "accountBalanceResult") {
-    return null;
-  }
-
-  const payload = readCallbackPayload(record.payload);
-  if (!(payload.ResultCode === 0 || payload.ResultCode === "0")) {
-    return null;
-  }
-
-  const balanceValue = readResultParameters(payload).find(
-    (parameter) => parameter.Key === "AccountBalance" && typeof parameter.Value === "string",
-  )?.Value;
-
-  if (typeof balanceValue !== "string" || !balanceValue.trim()) {
-    return null;
-  }
-
-  const accounts = balanceValue
-    .split("&")
-    .map((segment) => segment.trim())
-    .filter(Boolean)
-    .map((segment) => {
-      const [name, currency, currentRaw, availableRaw, reservedRaw, unclearedRaw] = segment
-        .split("|")
-        .map((part) => part.trim());
-
-      if (!name || !currency || !currentRaw || !availableRaw || !reservedRaw || !unclearedRaw) {
-        return null;
-      }
-
-      const current = parseBalanceNumber(currentRaw);
-      const available = parseBalanceNumber(availableRaw);
-      const reserved = parseBalanceNumber(reservedRaw);
-      const uncleared = parseBalanceNumber(unclearedRaw);
-
-      if (current === null || available === null || reserved === null || uncleared === null) {
-        return null;
-      }
-
-      return {
-        name,
-        currency,
-        current,
-        available,
-        reserved,
-        uncleared,
-      };
-    })
-    .filter((account): account is NonNullable<typeof account> => Boolean(account));
-
-  if (!accounts.length) {
-    return null;
-  }
-
-  const currencies = [...new Set(accounts.map((account) => account.currency))];
-
+function buildDefaultGatewayOverview(oauthHealthy: boolean): GatewayOverview {
   return {
-    status: "available" as const,
-    currency: currencies.length === 1 ? currencies[0] : undefined,
-    totalCurrent: roundMoney(
-      accounts.reduce((total, account) => total + account.current, 0),
-    ),
-    totalAvailable: roundMoney(
-      accounts.reduce((total, account) => total + account.available, 0),
-    ),
-    updatedAt: record.receivedAt,
-    accountCount: accounts.length,
+    environment: getGatewayConfig().mpesaEnvironment,
+    providerHealth: oauthHealthy ? "healthy" : "degraded",
+    oauthHealthy,
+    callbackCount: 0,
+    requestCount: 0,
+    failedRequestCount: 0,
+    slowRequestCount: 0,
+    activeApplicationCount: 0,
+    recentFailures: 0,
+    collectionsToday: 0,
+    payoutsToday: 0,
+    netFlowToday: 0,
+    balanceFreshnessMinutes: undefined,
+    oldestPendingMinutes: undefined,
+    projectionUpdatedAt: undefined,
+    shortcodeBalance: {
+      status: "unavailable",
+      accountCount: 0,
+    },
+    transactions: {
+      accepted: 0,
+      pending: 0,
+      succeeded: 0,
+      failed: 0,
+    },
   };
 }
 
-function pickLatestCallback<T extends { receivedAt: string }>(...records: Array<T | null | undefined>) {
-  return records
-    .filter((record): record is T => Boolean(record))
-    .sort((left, right) => Date.parse(right.receivedAt) - Date.parse(left.receivedAt))[0] ?? null;
-}
-
-function readNamedValue(
-  items: Array<Record<string, unknown>>,
-  keys: string[],
-  keyField: "Key" | "Name" = "Key",
+function matchesTransactionByCallbackPayload(
+  transaction: TransactionRecord,
+  payload: Record<string, unknown>,
 ) {
-  const match = items.find(
-    (item) =>
-      typeof item[keyField] === "string" &&
-      keys.some((key) => key.toLowerCase() === String(item[keyField]).toLowerCase()),
-  );
-
-  return match?.Value;
-}
-
-function extractCollectionAmount(callback: { callbackName: CallbackName; payload: Record<string, unknown> }) {
-  const payload = readCallbackPayload(callback.payload);
-
-  if (callback.callbackName === "stk") {
-    if (!(payload.ResultCode === 0 || payload.ResultCode === "0")) {
-      return null;
-    }
-
-    return parseAmount(readNamedValue(readCallbackMetadataItems(payload), ["Amount"]));
-  }
-
-  if (callback.callbackName === "c2bConfirmation") {
-    return parseAmount(payload.TransAmount ?? payload.Amount);
-  }
-
-  return null;
-}
-
-function extractPayoutAmount(callback: { callbackName: CallbackName; payload: Record<string, unknown> }) {
-  const payload = readCallbackPayload(callback.payload);
-  if (!(callback.callbackName === "b2cResult" || callback.callbackName === "b2bResult")) {
-    return null;
-  }
-
-  if (!(payload.ResultCode === 0 || payload.ResultCode === "0")) {
-    return null;
-  }
-
-  return parseAmount(
-    readNamedValue(readResultParameters(payload), ["TransactionAmount", "Amount", "DebitAmount"]) ??
-      payload.Amount,
-  );
-}
-
-function summarizeTodayFlows(callbacks: Array<{ callbackName: CallbackName; payload: Record<string, unknown> }>) {
-  let collectionsToday = 0;
-  let payoutsToday = 0;
-
-  for (const callback of callbacks) {
-    const collectionAmount = extractCollectionAmount(callback);
-    if (collectionAmount !== null) {
-      collectionsToday += collectionAmount;
-    }
-
-    const payoutAmount = extractPayoutAmount(callback);
-    if (payoutAmount !== null) {
-      payoutsToday += payoutAmount;
-    }
-  }
-
-  return {
-    collectionsToday: roundMoney(collectionsToday),
-    payoutsToday: roundMoney(payoutsToday),
-    netFlowToday: roundMoney(collectionsToday - payoutsToday),
-  };
-}
-
-function summarizePendingTransactions(transactions: TransactionRecord[]) {
-  const pending = transactions.filter(
-    (transaction) => transaction.status === "pending" || transaction.status === "accepted",
-  );
-
-  if (!pending.length) {
-    return {
-      pendingCount: 0,
-      oldestPendingMinutes: undefined,
-    };
-  }
-
-  const oldestCreatedAt = pending
-    .map((transaction) => Date.parse(transaction.createdAt))
-    .filter((value) => Number.isFinite(value))
-    .sort((left, right) => left - right)[0];
-
-  return {
-    pendingCount: pending.length,
-    oldestPendingMinutes:
-      oldestCreatedAt !== undefined
-        ? Math.max(0, Math.floor((Date.now() - oldestCreatedAt) / 60000))
-        : undefined,
-  };
-}
-
-function findTransactionForCallback(payload: Record<string, unknown>) {
   const transactionId = typeof payload.TransactionID === "string" ? payload.TransactionID : undefined;
   const conversationId = typeof payload.ConversationID === "string" ? payload.ConversationID : undefined;
   const originatorConversationId =
@@ -980,17 +783,28 @@ function findTransactionForCallback(payload: Record<string, unknown>) {
   const checkoutRequestId =
     typeof payload.CheckoutRequestID === "string" ? payload.CheckoutRequestID : undefined;
 
-  return getTransactions().find(
-    (transaction) =>
-      (checkoutRequestId !== undefined && transaction.id === checkoutRequestId) ||
-      (transactionId !== undefined && transaction.transactionId === transactionId) ||
-      (conversationId !== undefined && transaction.providerConversationId === conversationId) ||
-      (
-        originatorConversationId !== undefined &&
-        transaction.providerOriginatorConversationId === originatorConversationId
-      ) ||
-      (checkoutRequestId !== undefined && transaction.providerRequestId === checkoutRequestId),
+  return (
+    (checkoutRequestId !== undefined && transaction.id === checkoutRequestId) ||
+    (transactionId !== undefined && transaction.transactionId === transactionId) ||
+    (conversationId !== undefined && transaction.providerConversationId === conversationId) ||
+    (
+      originatorConversationId !== undefined &&
+      transaction.providerOriginatorConversationId === originatorConversationId
+    ) ||
+    (checkoutRequestId !== undefined && transaction.providerRequestId === checkoutRequestId)
   );
+}
+
+async function findTransactionForCallback(payload: Record<string, unknown>) {
+  const runtimeMatch = getTransactions().find((transaction) =>
+    matchesTransactionByCallbackPayload(transaction, payload),
+  );
+  if (runtimeMatch) {
+    return runtimeMatch;
+  }
+
+  const storedTransactions = (await listStoredTransactions(500).catch(() => null)) ?? [];
+  return storedTransactions.find((transaction) => matchesTransactionByCallbackPayload(transaction, payload));
 }
 
 function statusFromCallback(callbackName: CallbackName, payload: Record<string, unknown>): TransactionStatus {
@@ -1035,7 +849,7 @@ export async function processMpesaCallback(
   await persistCallbackRecord(callbackRecord);
   addCallback(callbackRecord);
 
-  const transaction = findTransactionForCallback(innerPayload);
+  const transaction = await findTransactionForCallback(innerPayload);
   if (transaction) {
     transaction.status = statusFromCallback(callbackName, innerPayload);
     transaction.updatedAt = new Date().toISOString();
@@ -1103,38 +917,6 @@ export async function processMpesaCallback(
 }
 
 export async function getGatewayOverview(): Promise<GatewayOverview> {
-  const todayStart = startOfTodayIso();
-  const [storedTransactions, storedLogs, storedCallbacks, todayStoredCallbacks, latestStoredBalanceCallback] =
-    await Promise.all([
-      listStoredTransactions(250).catch(() => null),
-      listStoredRequestLogs(250).catch(() => null),
-      listStoredCallbacks(250).catch(() => null),
-      listStoredCallbacksSince(
-        ["stk", "c2bConfirmation", "b2cResult", "b2bResult", "accountBalanceResult"],
-        todayStart,
-        500,
-      ).catch(() => null),
-      getLatestStoredCallback("accountBalanceResult").catch(() => null),
-    ]);
-
-  const transactions = storedTransactions ?? getTransactions();
-  const logs = storedLogs ?? getRequestLogs();
-  const callbacks = storedCallbacks ?? getCallbacks();
-  const todayCallbacks =
-    todayStoredCallbacks ??
-    callbacks.filter((callback) => Date.parse(callback.receivedAt) >= Date.parse(todayStart));
-  const latestRuntimeBalanceCallback =
-    callbacks.find((callback) => callback.callbackName === "accountBalanceResult") ?? null;
-  const latestBalanceSnapshot = extractShortcodeBalance(
-    pickLatestCallback(latestRuntimeBalanceCallback, latestStoredBalanceCallback),
-  );
-  const balanceFreshnessMinutes =
-    latestBalanceSnapshot?.updatedAt
-      ? Math.max(0, Math.floor((Date.now() - Date.parse(latestBalanceSnapshot.updatedAt)) / 60000))
-      : undefined;
-  const { collectionsToday, payoutsToday, netFlowToday } = summarizeTodayFlows(todayCallbacks);
-  const { pendingCount, oldestPendingMinutes } = summarizePendingTransactions(transactions);
-
   let oauthHealthy = false;
   try {
     await getAccessToken();
@@ -1145,30 +927,46 @@ export async function getGatewayOverview(): Promise<GatewayOverview> {
     });
   }
 
-  const failedTransactions = transactions.filter((item) => item.status === "failed").length;
+  const snapshot = await getAdminDashboardSnapshot().catch((error) => {
+    logEvent("warn", "Admin dashboard snapshot load failed", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return null;
+  });
+
+  if (!snapshot) {
+    return buildDefaultGatewayOverview(oauthHealthy);
+  }
+
   return {
     environment: getGatewayConfig().mpesaEnvironment,
     providerHealth: oauthHealthy ? "healthy" : "degraded",
     oauthHealthy,
-    callbackCount: callbacks.length,
-    requestCount: logs.length,
-    recentFailures: failedTransactions,
-    collectionsToday,
-    payoutsToday,
-    netFlowToday,
-    balanceFreshnessMinutes,
-    oldestPendingMinutes,
-    shortcodeBalance:
-      latestBalanceSnapshot ??
-      {
-        status: "unavailable",
-        accountCount: 0,
-      },
+    callbackCount: snapshot.callbackCount,
+    requestCount: snapshot.requestCount,
+    failedRequestCount: snapshot.failedRequestCount,
+    slowRequestCount: snapshot.slowRequestCount,
+    activeApplicationCount: snapshot.activeApplicationCount,
+    recentFailures: snapshot.transactionFailedCount,
+    collectionsToday: snapshot.collectionsToday,
+    payoutsToday: snapshot.payoutsToday,
+    netFlowToday: snapshot.netFlowToday,
+    balanceFreshnessMinutes: minutesSince(snapshot.latestBalanceCallbackAt),
+    oldestPendingMinutes: minutesSince(snapshot.oldestPendingCreatedAt),
+    projectionUpdatedAt: snapshot.projectionUpdatedAt,
+    shortcodeBalance: {
+      status: snapshot.balanceStatus,
+      currency: snapshot.balanceCurrency,
+      totalCurrent: snapshot.balanceTotalCurrent,
+      totalAvailable: snapshot.balanceTotalAvailable,
+      updatedAt: snapshot.latestBalanceCallbackAt,
+      accountCount: snapshot.balanceAccountCount,
+    },
     transactions: {
-      accepted: transactions.filter((item) => item.status === "accepted").length,
-      pending: pendingCount,
-      succeeded: transactions.filter((item) => item.status === "succeeded").length,
-      failed: failedTransactions,
+      accepted: snapshot.transactionProcessingCount,
+      pending: snapshot.transactionPendingCount,
+      succeeded: snapshot.transactionSucceededCount,
+      failed: snapshot.transactionFailedCount,
     },
   };
 }

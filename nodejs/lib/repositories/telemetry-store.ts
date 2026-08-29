@@ -1,4 +1,4 @@
-import type { RequestLogRecord, TransactionRecord } from "@/types/gateway";
+import type { AuditLogRecord, RequestLogRecord, TransactionRecord } from "@/types/gateway";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type AuditLogRow = {
@@ -8,6 +8,7 @@ type AuditLogRow = {
 
 const transactionSnapshotAction = "gateway_transaction_snapshot";
 const requestLogAction = "gateway_request_log";
+const auditLogAction = "gateway_audit_log";
 
 function isRecordObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -48,6 +49,20 @@ function isRequestLogRecord(value: unknown): value is RequestLogRecord {
     typeof value.status === "number" &&
     typeof value.latencyMs === "number" &&
     typeof value.timestamp === "string"
+  );
+}
+
+function isAuditLogRecord(value: unknown): value is AuditLogRecord {
+  if (!isRecordObject(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.id === "string" &&
+    (value.level === "info" || value.level === "warn" || value.level === "error") &&
+    typeof value.message === "string" &&
+    typeof value.timestamp === "string" &&
+    (value.data === undefined || isRecordObject(value.data))
   );
 }
 
@@ -126,6 +141,14 @@ export async function persistRequestLog(record: RequestLogRecord) {
   );
 }
 
+export async function persistAuditLog(record: AuditLogRecord) {
+  await insertAuditLog(
+    auditLogAction,
+    "gateway_audit_log",
+    record as unknown as Record<string, unknown>,
+  );
+}
+
 export async function listStoredTransactions(limit = 100): Promise<TransactionRecord[] | null> {
   const rows = await listAuditLogs(transactionSnapshotAction, Math.max(limit * 5, 200));
   if (!rows) {
@@ -157,4 +180,16 @@ export async function listStoredRequestLogs(limit = 100): Promise<RequestLogReco
     .map((row) => row.metadata)
     .filter(isRequestLogRecord)
     .slice(0, limit) as unknown as RequestLogRecord[];
+}
+
+export async function listStoredAuditLogs(limit = 100): Promise<AuditLogRecord[] | null> {
+  const rows = await listAuditLogs(auditLogAction, limit);
+  if (!rows) {
+    return null;
+  }
+
+  return rows
+    .map((row) => row.metadata)
+    .filter(isAuditLogRecord)
+    .slice(0, limit) as unknown as AuditLogRecord[];
 }
