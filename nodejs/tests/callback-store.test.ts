@@ -114,8 +114,8 @@ describe("callback store", () => {
     const callbacks = await listStoredCallbacks();
 
     expect(selectCalls).toEqual([
-      "id, event_type, merchant_id, payload, processing_status, received_at, source_ip",
-      "id, event_type, merchant_id, payload, processing_status, received_at",
+      "id, event_type, merchant_account_id, payload, processing_status, received_at, source_ip",
+      "id, event_type, merchant_account_id, payload, processing_status, received_at",
     ]);
     expect(callbacks).toEqual([
       expect.objectContaining({

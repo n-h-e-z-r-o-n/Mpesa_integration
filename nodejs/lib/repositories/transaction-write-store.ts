@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { getGatewayConfig } from "@/lib/mpesa/config";
 import type { GatewayRequestContext } from "@/lib/mpesa/types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -18,15 +20,15 @@ type MerchantRow = {
 
 type DatabaseTransactionRow = {
   id: string;
-  merchant_id: string;
+  merchant_account_id: string;
+  provider_operation: MpesaOperation;
 };
 
 type PersistedTransactionReference = {
   id: string;
   merchantId: string;
+  operation?: MpesaOperation;
 };
-
-let transactionsSupportsApplicationId: boolean | null = null;
 
 function isRecordObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -34,15 +36,6 @@ function isRecordObject(value: unknown): value is Record<string, unknown> {
 
 function readString(value: unknown) {
   return typeof value === "string" && value.trim() ? value : undefined;
-}
-
-function isMissingApplicationIdColumn(error: { message?: string } | null) {
-  const message = error?.message ?? "";
-  return (
-    message.includes("'application_id' column") ||
-    message.includes("transactions.application_id") ||
-    message.includes("column application_id does not exist")
-  );
 }
 
 function normalizeEnvironment(environment: "sandbox" | "production") {
@@ -151,6 +144,18 @@ function readCallbackMetadataItems(payload: Record<string, unknown>) {
   return [];
 }
 
+function readCallbackItemName(item: Record<string, unknown>) {
+  if (typeof item.Key === "string" && item.Key.trim()) {
+    return item.Key;
+  }
+
+  if (typeof item.Name === "string" && item.Name.trim()) {
+    return item.Name;
+  }
+
+  return undefined;
+}
+
 function readCallbackResultParameterItems(payload: Record<string, unknown>) {
   const resultParameters = payload.ResultParameters;
   if (!resultParameters || typeof resultParameters !== "object") {
@@ -172,8 +177,9 @@ function readCallbackResultParameterItems(payload: Record<string, unknown>) {
 function inferCallbackTransactionId(payload: Record<string, unknown>) {
   const nestedMatch = [...readCallbackMetadataItems(payload), ...readCallbackResultParameterItems(payload)].find(
     (item) =>
-      typeof item.Key === "string" &&
-      ["MpesaReceiptNumber", "TransactionID", "TransactionReceipt", "TransID"].includes(item.Key) &&
+      ["MpesaReceiptNumber", "TransactionID", "TransactionReceipt", "TransID"].includes(
+        readCallbackItemName(item) ?? "",
+      ) &&
       typeof item.Value === "string",
   );
 
@@ -212,6 +218,14 @@ function buildProviderMetadata(record: TransactionRecord) {
     responsePayload: record.responsePayload,
     callbackPayloads: record.callbackPayloads,
   } satisfies Record<string, unknown>;
+}
+
+function buildIdempotencyRequestHash(record: TransactionRecord) {
+  if (!record.idempotencyKey) {
+    return null;
+  }
+
+  return createHash("sha256").update(JSON.stringify(record.requestPayload)).digest("hex");
 }
 
 async function resolveFallbackMerchantId() {
@@ -284,6 +298,7 @@ async function findTransactionByColumn(
   column: string,
   value: string,
   merchantId?: string,
+  allowedOperations?: MpesaOperation[],
 ): Promise<PersistedTransactionReference | null> {
   const supabase = createSupabaseAdminClient();
   if (!supabase) {
@@ -292,14 +307,21 @@ async function findTransactionByColumn(
 
   let query = supabase
     .from("transactions")
-    .select("id, merchant_id")
+    .select("id, merchant_account_id, provider_operation")
     .eq("provider", "mpesa")
     .eq(column, value)
     .order("created_at", { ascending: false })
     .limit(1);
 
   if (merchantId) {
-    query = query.eq("merchant_id", merchantId);
+    query = query.eq("merchant_account_id", merchantId);
+  }
+
+  if (allowedOperations?.length) {
+    query =
+      allowedOperations.length === 1
+        ? query.eq("provider_operation", allowedOperations[0])
+        : query.in("provider_operation", allowedOperations);
   }
 
   const { data, error } = await query.returns<DatabaseTransactionRow[]>();
@@ -309,7 +331,13 @@ async function findTransactionByColumn(
   }
 
   const row = data?.[0];
-  return row ? { id: row.id, merchantId: row.merchant_id } : null;
+  return row
+    ? {
+        id: row.id,
+        merchantId: row.merchant_account_id,
+        ...(row.provider_operation ? { operation: row.provider_operation } : {}),
+      }
+    : null;
 }
 
 async function findExistingDatabaseTransaction(
@@ -346,7 +374,6 @@ function buildDatabasePayload(
   record: TransactionRecord,
   merchantId: string,
   transactionType: DatabaseTransactionType,
-  includeApplicationId: boolean,
 ) {
   const status = mapDatabaseStatus(record.status, record.operation);
   const amount = record.amount;
@@ -357,8 +384,7 @@ function buildDatabasePayload(
   }
 
   return {
-    merchant_id: merchantId,
-    ...(includeApplicationId ? { application_id: record.applicationId } : {}),
+    merchant_account_id: merchantId,
     environment: normalizeEnvironment(getGatewayConfig().mpesaEnvironment),
     provider: "mpesa",
     provider_operation: record.operation,
@@ -369,6 +395,7 @@ function buildDatabasePayload(
     currency: inferCurrency(record),
     external_reference: record.accountReference ?? null,
     idempotency_key: record.idempotencyKey ?? null,
+    idempotency_request_hash: buildIdempotencyRequestHash(record),
     customer_reference: record.accountReference ?? null,
     customer_msisdn: inferCustomerMsisdn(record, transactionType) ?? null,
     account_reference: record.accountReference ?? null,
@@ -385,6 +412,7 @@ function buildDatabasePayload(
       readString(providerResultPayload.errorMessage) ??
       null,
     provider_metadata: buildProviderMetadata(record),
+    updated_at: record.updatedAt,
     processing_started_at:
       status === "processing" || status === "pending" || isTerminalStatus(status)
         ? record.createdAt
@@ -408,75 +436,53 @@ export async function persistDatabaseTransactionRecord(
     return null;
   }
 
-  const merchantId = existing?.merchantId ?? (await resolveMerchantIdForContext(context));
+  const match = existing ?? (await findExistingDatabaseTransaction(record));
+  const merchantId = existing?.merchantId ?? match?.merchantId ?? (await resolveMerchantIdForContext(context));
   if (!merchantId) {
     return null;
   }
+  const payload = buildDatabasePayload(record, merchantId, transactionType);
+  if (!payload) {
+    return null;
+  }
 
-  const match = existing ?? (await findExistingDatabaseTransaction(record, merchantId));
-  const persistWithPayload = async (includeApplicationId: boolean) => {
-    const payload = buildDatabasePayload(record, merchantId, transactionType, includeApplicationId);
-    if (!payload) {
-      return null;
-    }
-
-    if (match) {
-      const { data, error } = await supabase
-        .from("transactions")
-        .update(payload)
-        .eq("id", match.id)
-        .select("id, merchant_id")
-        .single<DatabaseTransactionRow>();
-
-      if (error) {
-        if (includeApplicationId && isMissingApplicationIdColumn(error)) {
-          transactionsSupportsApplicationId = false;
-          return persistWithPayload(false);
-        }
-
-        throw new Error(`Unable to update database transaction: ${error.message}`);
-      }
-
-      if (transactionsSupportsApplicationId === null) {
-        transactionsSupportsApplicationId = includeApplicationId;
-      }
-
-      return {
-        id: data.id,
-        merchantId: data.merchant_id,
-      } satisfies PersistedTransactionReference;
-    }
-
+  if (match) {
     const { data, error } = await supabase
       .from("transactions")
-      .insert(payload)
-      .select("id, merchant_id")
+      .update(payload)
+      .eq("id", match.id)
+      .select("id, merchant_account_id")
       .single<DatabaseTransactionRow>();
 
     if (error) {
-      if (includeApplicationId && isMissingApplicationIdColumn(error)) {
-        transactionsSupportsApplicationId = false;
-        return persistWithPayload(false);
-      }
-
-      throw new Error(`Unable to insert database transaction: ${error.message}`);
-    }
-
-    if (transactionsSupportsApplicationId === null) {
-      transactionsSupportsApplicationId = includeApplicationId;
+      throw new Error(`Unable to update database transaction: ${error.message}`);
     }
 
     return {
       id: data.id,
-      merchantId: data.merchant_id,
-    } satisfies PersistedTransactionReference;
-  };
+      merchantId: data.merchant_account_id,
+    };
+  }
 
-  return persistWithPayload(transactionsSupportsApplicationId !== false);
+  const { data, error } = await supabase
+    .from("transactions")
+    .insert(payload)
+    .select("id, merchant_account_id")
+    .single<DatabaseTransactionRow>();
+
+  if (error) {
+    throw new Error(`Unable to insert database transaction: ${error.message}`);
+  }
+
+  return {
+    id: data.id,
+    merchantId: data.merchant_account_id,
+  };
 }
 
 export async function findDatabaseTransactionForCallbackPayload(
   payload: Record<string, unknown>,
+  allowedOperations?: MpesaOperation[],
 ) {
   const checkoutRequestId = readString(payload.CheckoutRequestID);
   const merchantRequestId = readString(payload.MerchantRequestID);
@@ -504,7 +510,12 @@ export async function findDatabaseTransactionForCallbackPayload(
       continue;
     }
 
-    const match = await findTransactionByColumn(candidate.column, candidate.value);
+    const match = await findTransactionByColumn(
+      candidate.column,
+      candidate.value,
+      undefined,
+      allowedOperations,
+    );
     if (match) {
       return match;
     }

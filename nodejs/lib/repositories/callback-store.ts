@@ -6,7 +6,7 @@ import { createSupabaseAdminClient, hasSupabaseAdminAccess } from "@/lib/supabas
 type ProviderEventRow = {
   event_type: string;
   id: string;
-  merchant_id?: string | null;
+  merchant_account_id?: string | null;
   payload: Record<string, unknown>;
   processing_status: string;
   received_at: string;
@@ -83,8 +83,8 @@ function buildInsertPayload(record: CallbackRecord, includeSourceIp: boolean) {
 
 function getSelectColumns(includeSourceIp: boolean) {
   return includeSourceIp
-    ? "id, event_type, merchant_id, payload, processing_status, received_at, source_ip"
-    : "id, event_type, merchant_id, payload, processing_status, received_at";
+    ? "id, event_type, merchant_account_id, payload, processing_status, received_at, source_ip"
+    : "id, event_type, merchant_account_id, payload, processing_status, received_at";
 }
 
 function isMissingSourceIpColumn(error: { message?: string } | null) {
@@ -189,7 +189,7 @@ export async function linkStoredCallbackToTransaction(
     .from("provider_events")
     .update({
       transaction_id: transactionId,
-      merchant_id: merchantId,
+      merchant_account_id: merchantId,
     })
     .eq("id", providerEventId);
 

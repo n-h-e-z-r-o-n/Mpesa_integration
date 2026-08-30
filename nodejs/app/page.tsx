@@ -225,10 +225,6 @@ export default async function HomePage() {
                 ))}
               </div>
             </section>
-
-            <section id="pricing" className="pb-2 pt-6 text-center text-sm text-slate-300">
-              Designed to make every payment touchpoint feel clear, fast, and trustworthy.
-            </section>
           </div>
         </section>
       </main>

@@ -20,7 +20,6 @@ describe("transaction store", () => {
                       data: [
                         {
                           id: "tx-1",
-                          application_id: "admin-console",
                           provider: "mpesa",
                           provider_operation: "stkPush",
                           status: "processing",
@@ -32,6 +31,7 @@ describe("transaction store", () => {
                           provider_transaction_id: "receipt-1",
                           idempotency_key: "idem-1",
                           created_at: "2026-08-29T18:00:00.000Z",
+                          updated_at: "2026-08-29T18:02:00.000Z",
                           processing_started_at: "2026-08-29T18:01:00.000Z",
                           completed_at: null,
                           provider_metadata: {
@@ -96,12 +96,8 @@ describe("transaction store", () => {
     await expect(listDatabaseTransactions()).resolves.toBeNull();
   });
 
-  test("retries reads without application_id when the live schema has not been migrated", async () => {
-    const missingApplicationIdError = {
-      message: "Could not find the 'application_id' column of 'transactions' in the schema cache",
-    };
+  test("reads the current transaction schema without application_id", async () => {
     const selectCalls: string[] = [];
-    let limitCallCount = 0;
 
     vi.doMock("@/lib/supabase/admin", () => ({
       createSupabaseAdminClient: () => ({
@@ -114,42 +110,35 @@ describe("transaction store", () => {
                 eq: () => ({
                   order: () => ({
                     limit: () => ({
-                      returns: async () => {
-                        limitCallCount += 1;
-                        if (limitCallCount === 1) {
-                          return { data: null, error: missingApplicationIdError };
-                        }
-
-                        return {
-                          data: [
-                            {
-                              id: "tx-compat",
-                              provider: "mpesa",
-                              provider_operation: "stkPush",
-                              status: "processing",
-                              amount: "125.50",
-                              customer_msisdn: "254700000001",
-                              account_reference: "INV-1001",
-                              external_reference: null,
-                              provider_request_id: "mid-1",
-                              provider_transaction_id: "receipt-1",
-                              idempotency_key: "idem-1",
-                              created_at: "2026-08-29T18:00:00.000Z",
-                              processing_started_at: "2026-08-29T18:01:00.000Z",
-                              completed_at: null,
-                              provider_metadata: {
-                                requestId: "req-1",
-                                applicationId: "admin-console",
-                                partyA: "174379",
-                                updatedAt: "2026-08-29T18:02:00.000Z",
-                                requestPayload: { Amount: 125.5 },
-                                callbackPayloads: [],
-                              },
+                      returns: async () => ({
+                        data: [
+                          {
+                            id: "tx-compat",
+                            provider: "mpesa",
+                            provider_operation: "stkPush",
+                            status: "processing",
+                            amount: "125.50",
+                            customer_msisdn: "254700000001",
+                            account_reference: "INV-1001",
+                            external_reference: null,
+                            provider_request_id: "mid-1",
+                            provider_transaction_id: "receipt-1",
+                            idempotency_key: "idem-1",
+                            created_at: "2026-08-29T18:00:00.000Z",
+                            updated_at: "2026-08-29T18:02:00.000Z",
+                            processing_started_at: "2026-08-29T18:01:00.000Z",
+                            completed_at: null,
+                            provider_metadata: {
+                              requestId: "req-1",
+                              applicationId: "admin-console",
+                              partyA: "174379",
+                              requestPayload: { Amount: 125.5 },
+                              callbackPayloads: [],
                             },
-                          ],
-                          error: null,
-                        };
-                      },
+                          },
+                        ],
+                        error: null,
+                      }),
                     }),
                   }),
                 }),
@@ -164,8 +153,7 @@ describe("transaction store", () => {
     const transactions = await listDatabaseTransactions();
 
     expect(selectCalls).toEqual([
-      "id, application_id, provider, provider_operation, status, amount, customer_msisdn, account_reference, external_reference, provider_request_id, provider_transaction_id, idempotency_key, created_at, processing_started_at, completed_at, provider_metadata",
-      "id, provider, provider_operation, status, amount, customer_msisdn, account_reference, external_reference, provider_request_id, provider_transaction_id, idempotency_key, created_at, processing_started_at, completed_at, provider_metadata",
+      "id, provider, provider_operation, status, amount, customer_msisdn, account_reference, external_reference, provider_request_id, provider_transaction_id, idempotency_key, created_at, updated_at, processing_started_at, completed_at, provider_metadata",
     ]);
     expect(transactions?.[0]).toMatchObject({
       id: "tx-compat",

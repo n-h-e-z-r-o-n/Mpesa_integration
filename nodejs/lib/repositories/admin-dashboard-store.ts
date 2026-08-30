@@ -94,6 +94,16 @@ function readOptionalString(value: string | null | undefined) {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
+function isOptionalProjectionError(error: { message?: string } | null) {
+  const message = error?.message ?? "";
+  return (
+    message.includes("permission denied for table admin_dashboard_state") ||
+    message.includes("permission denied for table admin_dashboard_balance_accounts") ||
+    message.includes("relation \"admin_dashboard_state\" does not exist") ||
+    message.includes("relation \"admin_dashboard_balance_accounts\" does not exist")
+  );
+}
+
 function mapBalanceAccount(row: AdminDashboardBalanceAccountRow): AdminDashboardBalanceAccountSnapshot {
   return {
     accountName: row.account_name,
@@ -184,6 +194,10 @@ export async function getAdminDashboardSnapshot(
     .maybeSingle<AdminDashboardStateRow>();
 
   if (stateError) {
+    if (isOptionalProjectionError(stateError)) {
+      return null;
+    }
+
     throw new Error(`Unable to load admin dashboard state: ${stateError.message}`);
   }
 
@@ -201,6 +215,10 @@ export async function getAdminDashboardSnapshot(
     .returns<AdminDashboardBalanceAccountRow[]>();
 
   if (balanceError) {
+    if (isOptionalProjectionError(balanceError)) {
+      return mapSnapshot(state, []);
+    }
+
     throw new Error(`Unable to load admin dashboard balance accounts: ${balanceError.message}`);
   }
 

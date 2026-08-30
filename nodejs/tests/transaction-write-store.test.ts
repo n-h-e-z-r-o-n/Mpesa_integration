@@ -45,7 +45,7 @@ describe("transaction write store", () => {
         single: async () => ({
           data: {
             id: "db-transaction-1",
-            merchant_id: "11111111-1111-4111-8111-111111111111",
+            merchant_account_id: "11111111-1111-4111-8111-111111111111",
           },
           error: null,
         }),
@@ -115,8 +115,7 @@ describe("transaction write store", () => {
 
     expect(insert).toHaveBeenCalledWith(
       expect.objectContaining({
-        merchant_id: "11111111-1111-4111-8111-111111111111",
-        application_id: "admin-console",
+        merchant_account_id: "11111111-1111-4111-8111-111111111111",
         environment: "sandbox",
         provider: "mpesa",
         provider_operation: "stkPush",
@@ -124,6 +123,8 @@ describe("transaction write store", () => {
         status: "pending",
         amount: 125,
         provider_request_id: "ws_CO_123",
+        idempotency_request_hash: expect.any(String),
+        updated_at: "2026-08-29T18:00:00.000Z",
         provider_metadata: expect.objectContaining({
           recordId: "ws_CO_123",
           requestId: "req-1",
@@ -149,14 +150,15 @@ describe("transaction write store", () => {
                   order: () => ({
                     limit: () => ({
                       returns: async () => ({
-                        data: [
-                          {
-                            id: "db-transaction-2",
-                            merchant_id: "22222222-2222-4222-8222-222222222222",
-                          },
-                        ],
-                        error: null,
-                      }),
+                      data: [
+                        {
+                          id: "db-transaction-2",
+                          merchant_account_id: "22222222-2222-4222-8222-222222222222",
+                          provider_operation: "stkPush",
+                        },
+                      ],
+                      error: null,
+                    }),
                     }),
                   }),
                 }),
@@ -179,16 +181,76 @@ describe("transaction write store", () => {
     expect(result).toEqual({
       id: "db-transaction-2",
       merchantId: "22222222-2222-4222-8222-222222222222",
+      operation: "stkPush",
     });
   });
 
-  test("resolves merchant_id from the logged-in admin user when admin context initiates the transaction", async () => {
+  test("filters callback transaction lookups by allowed operations", async () => {
+    const eq = vi.fn();
+    const inFilter = vi.fn();
+
+    vi.doMock("@/lib/supabase/admin", () => ({
+      createSupabaseAdminClient: () => ({
+        from: (table: string) => {
+          expect(table).toBe("transactions");
+
+          const query = {
+            eq: (column: string, value: string) => {
+              eq(column, value);
+              return query;
+            },
+            in: (column: string, values: string[]) => {
+              inFilter(column, values);
+              return query;
+            },
+            order: () => query,
+            limit: () => query,
+            returns: async () => ({
+              data: [
+                {
+                  id: "db-transaction-allowed",
+                  merchant_account_id: "44444444-4444-4444-8444-444444444444",
+                  provider_operation: "stkPush",
+                },
+              ],
+              error: null,
+            }),
+          };
+
+          return {
+            select: () => query,
+          };
+        },
+      }),
+    }));
+
+    const { findDatabaseTransactionForCallbackPayload } = await import(
+      "@/lib/repositories/transaction-write-store"
+    );
+
+    const result = await findDatabaseTransactionForCallbackPayload(
+      {
+        CheckoutRequestID: "ws_CO_allowed",
+        ResultCode: 0,
+      },
+      ["stkPush", "c2bSimulate"],
+    );
+
+    expect(inFilter).toHaveBeenCalledWith("provider_operation", ["stkPush", "c2bSimulate"]);
+    expect(result).toEqual({
+      id: "db-transaction-allowed",
+      merchantId: "44444444-4444-4444-8444-444444444444",
+      operation: "stkPush",
+    });
+  });
+
+  test("resolves merchant_account_id from the logged-in admin user when admin context initiates the transaction", async () => {
     const insert = vi.fn().mockReturnValue({
       select: () => ({
         single: async () => ({
           data: {
             id: "db-transaction-3",
-            merchant_id: "33333333-3333-4333-8333-333333333333",
+            merchant_account_id: "33333333-3333-4333-8333-333333333333",
           },
           error: null,
         }),
@@ -266,7 +328,7 @@ describe("transaction write store", () => {
 
     expect(insert).toHaveBeenCalledWith(
       expect.objectContaining({
-        merchant_id: "33333333-3333-4333-8333-333333333333",
+        merchant_account_id: "33333333-3333-4333-8333-333333333333",
       }),
     );
     expect(result).toEqual({
@@ -275,21 +337,15 @@ describe("transaction write store", () => {
     });
   });
 
-  test("retries transaction inserts without application_id when the live schema has not been migrated", async () => {
-    const missingApplicationIdError = {
-      message: "Could not find the 'application_id' column of 'transactions' in the schema cache",
-    };
+  test("inserts against the current transaction schema without application_id", async () => {
     const insert = vi.fn();
-    const single = vi
-      .fn()
-      .mockResolvedValueOnce({ data: null, error: missingApplicationIdError })
-      .mockResolvedValueOnce({
-        data: {
-          id: "db-transaction-4",
-          merchant_id: "11111111-1111-4111-8111-111111111111",
-        },
-        error: null,
-      });
+    const single = vi.fn().mockResolvedValue({
+      data: {
+        id: "db-transaction-4",
+        merchant_account_id: "11111111-1111-4111-8111-111111111111",
+      },
+      error: null,
+    });
 
     vi.doMock("@/lib/supabase/admin", () => ({
       createSupabaseAdminClient: () => ({
@@ -356,15 +412,8 @@ describe("transaction write store", () => {
       merchantId: "11111111-1111-4111-8111-111111111111",
     });
 
-    expect(insert).toHaveBeenCalledTimes(2);
-    expect(insert).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        application_id: "admin-console",
-      }),
-    );
-    expect(insert).toHaveBeenNthCalledWith(
-      2,
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(insert).toHaveBeenCalledWith(
       expect.not.objectContaining({
         application_id: expect.anything(),
       }),

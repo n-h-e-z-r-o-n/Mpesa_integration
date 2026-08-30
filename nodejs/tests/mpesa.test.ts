@@ -714,6 +714,398 @@ describe("M-Pesa gateway", () => {
     );
   });
 
+  test("reconciles c2b confirmation callbacks against pending stk transactions when the stk callback is missing", async () => {
+    const persistTransactionSnapshot = vi.fn().mockResolvedValue(undefined);
+    const persistDatabaseTransactionRecord = vi.fn().mockResolvedValue({
+      id: "db-transaction-stk",
+      merchantId: "11111111-1111-4111-8111-111111111111",
+    });
+    const persistCallbackRecord = vi.fn().mockResolvedValue("provider-event-stk");
+    const linkStoredCallbackToTransaction = vi.fn().mockResolvedValue(undefined);
+
+    vi.doMock("@/lib/repositories/transaction-store", () => ({
+      listDatabaseTransactions: async () => [
+        {
+          id: "req-stk-1",
+          requestId: "req-stk-1",
+          provider: "mpesa" as const,
+          operation: "stkPush" as const,
+          applicationId: "admin-console",
+          status: "pending" as const,
+          amount: 1,
+          partyA: "254714415034",
+          partyB: "4329713",
+          accountReference: "testing",
+          providerRequestId: "ws_CO_123",
+          createdAt: new Date(Date.now() - 60_000).toISOString(),
+          updatedAt: new Date(Date.now() - 60_000).toISOString(),
+          requestPayload: { Amount: 1 },
+          responsePayload: { CheckoutRequestID: "ws_CO_123" },
+          callbackPayloads: [],
+        },
+      ],
+    }));
+
+    vi.doMock("@/lib/repositories/telemetry-store", async () => {
+      const actual = await vi.importActual<typeof import("@/lib/repositories/telemetry-store")>(
+        "@/lib/repositories/telemetry-store",
+      );
+
+      return {
+        ...actual,
+        persistRequestLog: async () => undefined,
+        persistTransactionSnapshot,
+      };
+    });
+
+    vi.doMock("@/lib/repositories/callback-store", () => ({
+      persistCallbackRecord,
+      linkStoredCallbackToTransaction,
+    }));
+
+    vi.doMock("@/lib/repositories/transaction-write-store", () => ({
+      findDatabaseTransactionForCallbackPayload: async () => null,
+      persistDatabaseTransactionRecord,
+    }));
+
+    const { processMpesaCallback } = await import("@/services/mpesa/service");
+
+    await processMpesaCallback(
+      "c2bConfirmation",
+      {
+        MSISDN: "254714415034",
+        TransID: "UHT0U45KSB",
+        TransAmount: "1.00",
+        BillRefNumber: "testing",
+        BusinessShortCode: "4329713",
+      },
+      "127.0.0.1",
+    );
+
+    expect(persistDatabaseTransactionRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "req-stk-1",
+        operation: "stkPush",
+        status: "succeeded",
+        transactionId: "UHT0U45KSB",
+        providerRequestId: "ws_CO_123",
+        callbackPayloads: [expect.objectContaining({ TransID: "UHT0U45KSB" })],
+      }),
+      expect.objectContaining({
+        applicationId: "admin-console",
+        route: "/api/mpesa/callbacks/c2bConfirmation",
+      }),
+      null,
+    );
+    expect(linkStoredCallbackToTransaction).toHaveBeenCalledWith(
+      "provider-event-stk",
+      "db-transaction-stk",
+      "11111111-1111-4111-8111-111111111111",
+    );
+    expect(persistTransactionSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "req-stk-1",
+        status: "succeeded",
+        transactionId: "UHT0U45KSB",
+      }),
+    );
+  });
+
+  test("ignores c2bRegister records when reconciling a c2b confirmation back to stk", async () => {
+    const persistTransactionSnapshot = vi.fn().mockResolvedValue(undefined);
+    const persistDatabaseTransactionRecord = vi.fn().mockResolvedValue({
+      id: "db-transaction-stk",
+      merchantId: "11111111-1111-4111-8111-111111111111",
+    });
+    const persistCallbackRecord = vi.fn().mockResolvedValue("provider-event-stk");
+    const linkStoredCallbackToTransaction = vi.fn().mockResolvedValue(undefined);
+
+    vi.doMock("@/lib/repositories/transaction-store", () => ({
+      listDatabaseTransactions: async () => [
+        {
+          id: "req-c2b-register",
+          requestId: "req-c2b-register",
+          provider: "mpesa" as const,
+          operation: "c2bRegister" as const,
+          applicationId: "admin-console",
+          status: "accepted" as const,
+          amount: 1,
+          partyA: "254714415034",
+          partyB: "4329713",
+          accountReference: "testing",
+          transactionId: "UHT0U45KSB",
+          providerRequestId: "UHT0U45KSB",
+          createdAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+          updatedAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+          requestPayload: { Amount: 1 },
+          responsePayload: {},
+          callbackPayloads: [],
+        },
+        {
+          id: "req-stk-2",
+          requestId: "req-stk-2",
+          provider: "mpesa" as const,
+          operation: "stkPush" as const,
+          applicationId: "admin-console",
+          status: "pending" as const,
+          amount: 1,
+          partyA: "254714415034",
+          partyB: "4329713",
+          accountReference: "testing",
+          providerRequestId: "ws_CO_456",
+          createdAt: new Date(Date.now() - 60_000).toISOString(),
+          updatedAt: new Date(Date.now() - 60_000).toISOString(),
+          requestPayload: { Amount: 1 },
+          responsePayload: { CheckoutRequestID: "ws_CO_456" },
+          callbackPayloads: [],
+        },
+      ],
+    }));
+
+    vi.doMock("@/lib/repositories/telemetry-store", async () => {
+      const actual = await vi.importActual<typeof import("@/lib/repositories/telemetry-store")>(
+        "@/lib/repositories/telemetry-store",
+      );
+
+      return {
+        ...actual,
+        persistRequestLog: async () => undefined,
+        persistTransactionSnapshot,
+      };
+    });
+
+    vi.doMock("@/lib/repositories/callback-store", () => ({
+      persistCallbackRecord,
+      linkStoredCallbackToTransaction,
+    }));
+
+    vi.doMock("@/lib/repositories/transaction-write-store", () => ({
+      findDatabaseTransactionForCallbackPayload: async () => null,
+      persistDatabaseTransactionRecord,
+    }));
+
+    const { processMpesaCallback } = await import("@/services/mpesa/service");
+
+    await processMpesaCallback(
+      "c2bConfirmation",
+      {
+        MSISDN: "254714415034",
+        TransID: "UHT0U45KSB",
+        TransAmount: "1.00",
+        BillRefNumber: "testing",
+        BusinessShortCode: "4329713",
+      },
+      "127.0.0.1",
+    );
+
+    expect(persistDatabaseTransactionRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "req-stk-2",
+        operation: "stkPush",
+        status: "succeeded",
+        transactionId: "UHT0U45KSB",
+        providerRequestId: "ws_CO_456",
+      }),
+      expect.objectContaining({
+        applicationId: "admin-console",
+        route: "/api/mpesa/callbacks/c2bConfirmation",
+      }),
+      null,
+    );
+    expect(persistTransactionSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "req-stk-2",
+        operation: "stkPush",
+        status: "succeeded",
+      }),
+    );
+  });
+
+  test("does not materialize a standalone transaction for unmatched c2b confirmation callbacks", async () => {
+    const persistTransactionSnapshot = vi.fn().mockResolvedValue(undefined);
+    const persistDatabaseTransactionRecord = vi.fn().mockResolvedValue({
+      id: "db-transaction-unexpected",
+      merchantId: "11111111-1111-4111-8111-111111111111",
+    });
+    const persistCallbackRecord = vi.fn().mockResolvedValue("provider-event-c2b");
+    const linkStoredCallbackToTransaction = vi.fn().mockResolvedValue(undefined);
+
+    vi.doMock("@/lib/repositories/transaction-store", () => ({
+      listDatabaseTransactions: async () => [],
+    }));
+
+    vi.doMock("@/lib/repositories/telemetry-store", async () => {
+      const actual = await vi.importActual<typeof import("@/lib/repositories/telemetry-store")>(
+        "@/lib/repositories/telemetry-store",
+      );
+
+      return {
+        ...actual,
+        persistRequestLog: async () => undefined,
+        persistTransactionSnapshot,
+      };
+    });
+
+    vi.doMock("@/lib/repositories/callback-store", () => ({
+      persistCallbackRecord,
+      linkStoredCallbackToTransaction,
+    }));
+
+    vi.doMock("@/lib/repositories/transaction-write-store", () => ({
+      findDatabaseTransactionForCallbackPayload: async () => null,
+      persistDatabaseTransactionRecord,
+    }));
+
+    const { processMpesaCallback } = await import("@/services/mpesa/service");
+    const { getTransactions, getRequestLogs } = await import("@/lib/repositories/runtime-store");
+
+    await processMpesaCallback(
+      "c2bConfirmation",
+      {
+        MSISDN: "254714415034",
+        TransID: "UHT0U45KSB",
+        TransAmount: "1.00",
+        BillRefNumber: "testing",
+        BusinessShortCode: "4329713",
+      },
+      "127.0.0.1",
+    );
+
+    expect(persistDatabaseTransactionRecord).not.toHaveBeenCalled();
+    expect(linkStoredCallbackToTransaction).not.toHaveBeenCalled();
+    expect(persistTransactionSnapshot).not.toHaveBeenCalled();
+    expect(getTransactions()).toHaveLength(0);
+    expect(getRequestLogs()[0]).toMatchObject({
+      operation: "callback",
+      route: "/api/mpesa/callbacks/c2bConfirmation",
+      providerStatus: "succeeded",
+    });
+    expect(persistCallbackRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        callbackName: "c2bConfirmation",
+      }),
+    );
+  });
+
+  test("reconciles stale pending stk transactions through stk query results", async () => {
+    const persistDatabaseTransactionRecord = vi.fn().mockResolvedValue({
+      id: "db-transaction-stk-query",
+      merchantId: "11111111-1111-4111-8111-111111111111",
+    });
+    const persistTransactionSnapshot = vi.fn().mockResolvedValue(undefined);
+    const persistRequestLog = vi.fn().mockResolvedValue(undefined);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "token-1", expires_in: 3600 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ResponseCode: "0",
+            ResultCode: "0",
+            ResultDesc: "The service request is processed successfully.",
+            CheckoutRequestID: "ws_CO_stale",
+            MpesaReceiptNumber: "UHT0U45KSC",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+    vi.doMock("@/lib/repositories/transaction-store", () => ({
+      listDatabaseTransactions: async () => [
+        {
+          id: "req-stale-1",
+          requestId: "req-stale-1",
+          provider: "mpesa" as const,
+          operation: "stkPush" as const,
+          applicationId: "admin-console",
+          status: "pending" as const,
+          amount: 10,
+          partyA: "254714415034",
+          partyB: "174379",
+          accountReference: "INV1001",
+          providerRequestId: "ws_CO_stale",
+          createdAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+          updatedAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+          requestPayload: { Amount: 10 },
+          responsePayload: { CheckoutRequestID: "ws_CO_stale" },
+          callbackPayloads: [],
+        },
+      ],
+    }));
+    vi.doMock("@/lib/repositories/transaction-write-store", () => ({
+      findDatabaseTransactionForCallbackPayload: async () => null,
+      persistDatabaseTransactionRecord,
+    }));
+    vi.doMock("@/lib/repositories/telemetry-store", async () => {
+      const actual = await vi.importActual<typeof import("@/lib/repositories/telemetry-store")>(
+        "@/lib/repositories/telemetry-store",
+      );
+
+      return {
+        ...actual,
+        persistRequestLog,
+        persistTransactionSnapshot,
+      };
+    });
+
+    const { reconcilePendingStkTransactions } = await import("@/services/mpesa/service");
+    const result = await reconcilePendingStkTransactions({
+      limit: 5,
+      minAgeMinutes: 5,
+      maxAgeMinutes: 60,
+    });
+
+    expect(result).toMatchObject({
+      checked: 1,
+      updated: 1,
+      stillPending: 0,
+      failedQueries: 0,
+      items: [
+        expect.objectContaining({
+          id: "req-stale-1",
+          previousStatus: "pending",
+          status: "succeeded",
+          outcome: "updated",
+          resultCode: "0",
+        }),
+      ],
+    });
+    expect(persistDatabaseTransactionRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "req-stale-1",
+        status: "succeeded",
+        providerRequestId: "ws_CO_stale",
+        callbackPayloads: [
+          expect.objectContaining({
+            reconciliationSource: "stkQuery",
+            ResultCode: "0",
+            CheckoutRequestID: "ws_CO_stale",
+          }),
+        ],
+      }),
+      expect.objectContaining({
+        applicationId: "admin-console",
+        route: "/api/admin/mpesa/reconcile-pending-stk",
+      }),
+    );
+    expect(persistTransactionSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "req-stale-1",
+        status: "succeeded",
+      }),
+    );
+    expect(persistRequestLog).toHaveBeenCalledTimes(1);
+  });
+
   test("exposes latest known shortcode balance from account balance callbacks", async () => {
     vi.doMock("@/lib/repositories/admin-dashboard-store", () => ({
       getAdminDashboardSnapshot: async () => ({
@@ -754,6 +1146,7 @@ describe("M-Pesa gateway", () => {
       currency: "KES",
       totalCurrent: 23,
       totalAvailable: 23,
+      updatedAt: "2026-08-29T15:31:00.000Z",
       accountCount: 2,
     });
   });

@@ -910,6 +910,18 @@ function readCallbackMetadataItems(payload: Record<string, unknown>) {
   return [];
 }
 
+function readCallbackItemName(item: Record<string, unknown>) {
+  if (typeof item.Key === "string" && item.Key.trim()) {
+    return item.Key;
+  }
+
+  if (typeof item.Name === "string" && item.Name.trim()) {
+    return item.Name;
+  }
+
+  return undefined;
+}
+
 function inferCallbackTransactionId(payload: Record<string, unknown>) {
   const directTransactionId = inferTransactionId(payload);
   if (directTransactionId) {
@@ -928,8 +940,7 @@ function inferCallbackTransactionId(payload: Record<string, unknown>) {
 
   const receiptMatch = readCallbackMetadataItems(payload).find(
     (item) =>
-      typeof item.Key === "string" &&
-      ["MpesaReceiptNumber", "TransactionID"].includes(item.Key) &&
+      ["MpesaReceiptNumber", "TransactionID"].includes(readCallbackItemName(item) ?? "") &&
       typeof item.Value === "string",
   );
 
@@ -965,8 +976,7 @@ function readCallbackNamedValue(payload: Record<string, unknown>, keys: string[]
   const items = [...readCallbackMetadataItems(payload), ...readCallbackResultParameterItems(payload)];
   const match = items.find(
     (item) =>
-      typeof item.Key === "string" &&
-      keys.includes(item.Key) &&
+      keys.includes(readCallbackItemName(item) ?? "") &&
       item.Value !== undefined &&
       item.Value !== null &&
       item.Value !== "",
@@ -1026,6 +1036,48 @@ function inferCallbackOperation(callbackName: CallbackName): MpesaOperation | nu
   }
 }
 
+function allowedTransactionOperationsForCallback(callbackName: CallbackName): MpesaOperation[] | null {
+  switch (callbackName) {
+    case "stk":
+      return ["stkPush"];
+    case "c2bConfirmation":
+    case "c2bValidation":
+      return ["stkPush", "c2bSimulate"];
+    case "b2cResult":
+    case "b2cTimeout":
+      return ["b2c", "businessToPochi"];
+    case "b2bResult":
+    case "b2bTimeout":
+      return ["b2b"];
+    case "reversalResult":
+    case "reversalTimeout":
+      return ["reversal"];
+    case "transactionStatusResult":
+    case "transactionStatusTimeout":
+      return ["transactionStatus"];
+    case "accountBalanceResult":
+    case "accountBalanceTimeout":
+      return ["accountBalance"];
+    case "pullTransactions":
+      return ["pullTransactions", "pullTransactionsQuery", "pullTransactionsRegister"];
+    case "billManager":
+      return [
+        "billManager",
+        "billManagerOptin",
+        "billManagerChangeOptinDetails",
+        "billManagerCreateSingleInvoice",
+        "billManagerCreateBulkInvoices",
+        "billManagerCancelSingleInvoice",
+        "billManagerCancelBulkInvoices",
+        "billManagerReconciliation",
+      ];
+    case "ratiba":
+      return ["ratiba"];
+    default:
+      return null;
+  }
+}
+
 function inferCallbackAmount(callbackName: CallbackName, payload: Record<string, unknown>) {
   switch (callbackName) {
     case "stk":
@@ -1048,6 +1100,10 @@ function buildSyntheticTransactionFromCallback(
   payload: Record<string, unknown>,
   requestId: string,
 ): TransactionRecord | null {
+  if (callbackName === "c2bConfirmation" || callbackName === "c2bValidation") {
+    return null;
+  }
+
   const operation = inferCallbackOperation(callbackName);
   const amount = inferCallbackAmount(callbackName, payload);
   if (!operation || amount === undefined || amount <= 0) {
@@ -1118,6 +1174,140 @@ function minutesSince(timestamp?: string) {
   return Math.max(0, Math.floor((Date.now() - parsed) / 60000));
 }
 
+function normalizeDigits(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const digits = value.replace(/\D/g, "");
+    return digits || undefined;
+  }
+
+  return undefined;
+}
+
+function normalizeReference(value?: string) {
+  return value?.trim().toLowerCase() || undefined;
+}
+
+function amountsMatch(left?: number, right?: number) {
+  return left !== undefined && right !== undefined && Math.abs(left - right) < 0.01;
+}
+
+function matchesC2bConfirmationToPendingStk(
+  transaction: TransactionRecord,
+  payload: Record<string, unknown>,
+) {
+  if (transaction.operation !== "stkPush" || !["pending", "accepted"].includes(transaction.status)) {
+    return false;
+  }
+
+  const callbackAmount = readCallbackNumber(payload, ["TransAmount", "Amount"]);
+  if (!amountsMatch(callbackAmount, transaction.amount)) {
+    return false;
+  }
+
+  const callbackPhone = normalizeDigits(readCallbackNamedValue(payload, ["MSISDN", "PhoneNumber", "Msisdn"]));
+  const transactionPhone = normalizeDigits(transaction.partyA);
+  if (callbackPhone && transactionPhone && callbackPhone !== transactionPhone) {
+    return false;
+  }
+
+  const callbackShortCode = normalizeDigits(
+    readCallbackNamedValue(payload, ["BusinessShortCode", "ShortCode"]),
+  );
+  const transactionShortCode = normalizeDigits(transaction.partyB);
+  if (callbackShortCode && transactionShortCode && callbackShortCode !== transactionShortCode) {
+    return false;
+  }
+
+  const callbackReference = normalizeReference(
+    typeof readCallbackNamedValue(payload, ["BillRefNumber", "AccountReference", "InvoiceNumber"]) === "string"
+      ? String(readCallbackNamedValue(payload, ["BillRefNumber", "AccountReference", "InvoiceNumber"]))
+      : undefined,
+  );
+  const transactionReference = normalizeReference(transaction.accountReference);
+  if (callbackReference && transactionReference && callbackReference !== transactionReference) {
+    return false;
+  }
+
+  const createdAt = Date.parse(transaction.createdAt);
+  if (Number.isFinite(createdAt) && Date.now() - createdAt > 30 * 60 * 1000) {
+    return false;
+  }
+
+  return Boolean(
+    (callbackPhone && transactionPhone) ||
+      (callbackReference && transactionReference) ||
+      (callbackShortCode && transactionShortCode),
+  );
+}
+
+function findPendingStkTransactionForC2bConfirmation(transactions: TransactionRecord[], payload: Record<string, unknown>) {
+  const candidates = transactions.filter((transaction) =>
+    matchesC2bConfirmationToPendingStk(transaction, payload),
+  );
+
+  if (candidates.length !== 1) {
+    return null;
+  }
+
+  return candidates[0] ?? null;
+}
+
+function isTerminalTransactionStatus(status: TransactionStatus) {
+  return ["succeeded", "failed", "cancelled", "timeout"].includes(status);
+}
+
+function readResultCode(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+
+  return undefined;
+}
+
+function shouldReconcilePendingStkTransaction(
+  transaction: TransactionRecord,
+  now: number,
+  minAgeMs: number,
+  maxAgeMs: number,
+) {
+  if (transaction.operation !== "stkPush" || !["pending", "accepted"].includes(transaction.status)) {
+    return false;
+  }
+
+  if (!transaction.providerRequestId) {
+    return false;
+  }
+
+  const createdAt = Date.parse(transaction.createdAt);
+  if (!Number.isFinite(createdAt)) {
+    return false;
+  }
+
+  const ageMs = now - createdAt;
+  return ageMs >= minAgeMs && ageMs <= maxAgeMs;
+}
+
+function buildReconciliationCallbackPayload(payload: Record<string, unknown>) {
+  return {
+    reconciliationSource: "stkQuery",
+    reconciledAt: new Date().toISOString(),
+    ...sanitizeForLogs(payload),
+  };
+}
+
+function statusFromStkQueryPayload(payload: Record<string, unknown>, currentStatus: TransactionStatus) {
+  const resolved = statusFromCallback("stk", payload);
+  return resolved === "accepted" ? currentStatus : resolved;
+}
+
 function buildDefaultGatewayOverview(oauthHealthy: boolean): GatewayOverview {
   return {
     environment: getGatewayConfig().mpesaEnvironment,
@@ -1151,7 +1341,12 @@ function buildDefaultGatewayOverview(oauthHealthy: boolean): GatewayOverview {
 function matchesTransactionByCallbackPayload(
   transaction: TransactionRecord,
   payload: Record<string, unknown>,
+  allowedOperations?: MpesaOperation[] | null,
 ) {
+  if (allowedOperations?.length && !allowedOperations.includes(transaction.operation)) {
+    return false;
+  }
+
   const transactionId = inferCallbackTransactionId(payload);
   const conversationId = typeof payload.ConversationID === "string" ? payload.ConversationID : undefined;
   const originatorConversationId =
@@ -1173,16 +1368,32 @@ function matchesTransactionByCallbackPayload(
   );
 }
 
-async function findTransactionForCallback(payload: Record<string, unknown>) {
-  const runtimeMatch = getTransactions().find((transaction) =>
-    matchesTransactionByCallbackPayload(transaction, payload),
+async function findTransactionForCallback(callbackName: CallbackName, payload: Record<string, unknown>) {
+  const allowedOperations = allowedTransactionOperationsForCallback(callbackName);
+  const runtimeTransactions = getTransactions();
+  const runtimeMatch = runtimeTransactions.find((transaction) =>
+    matchesTransactionByCallbackPayload(transaction, payload, allowedOperations),
   );
   if (runtimeMatch) {
     return runtimeMatch;
   }
 
   const databaseTransactions = (await listDatabaseTransactions(500).catch(() => null)) ?? [];
-  return databaseTransactions.find((transaction) => matchesTransactionByCallbackPayload(transaction, payload));
+  const databaseMatch = databaseTransactions.find((transaction) =>
+    matchesTransactionByCallbackPayload(transaction, payload, allowedOperations),
+  );
+  if (databaseMatch) {
+    return databaseMatch;
+  }
+
+  if (callbackName === "c2bConfirmation") {
+    return (
+      findPendingStkTransactionForC2bConfirmation(runtimeTransactions, payload) ??
+      findPendingStkTransactionForC2bConfirmation(databaseTransactions, payload)
+    );
+  }
+
+  return null;
 }
 
 function statusFromCallback(callbackName: CallbackName, payload: Record<string, unknown>): TransactionStatus {
@@ -1231,12 +1442,27 @@ export async function processMpesaCallback(
   const storedCallbackId = await persistCallbackRecord(callbackRecord);
   addCallback(callbackRecord);
 
+  const allowedOperations = allowedTransactionOperationsForCallback(callbackName) ?? undefined;
   const databaseTransactionMatch =
-    await findDatabaseTransactionForCallbackPayload(innerPayload).catch(() => null);
+    await findDatabaseTransactionForCallbackPayload(innerPayload, allowedOperations).catch(() => null);
   const transaction =
-    (await findTransactionForCallback(innerPayload)) ??
+    (await findTransactionForCallback(callbackName, innerPayload)) ??
     buildSyntheticTransactionFromCallback(callbackName, innerPayload, requestId);
   let persistedDatabaseTransaction = databaseTransactionMatch;
+  if (!transaction && (callbackName === "c2bConfirmation" || callbackName === "c2bValidation")) {
+    logEvent("warn", "M-Pesa C2B callback did not match an existing transaction", {
+      requestId,
+      callbackName,
+      providerRequestId: inferCallbackProviderRequestId(innerPayload),
+      transactionId: inferCallbackTransactionId(innerPayload),
+      amount: inferCallbackAmount(callbackName, innerPayload),
+      accountReference:
+        typeof readCallbackNamedValue(innerPayload, ["BillRefNumber", "AccountReference", "InvoiceNumber"]) ===
+        "string"
+          ? readCallbackNamedValue(innerPayload, ["BillRefNumber", "AccountReference", "InvoiceNumber"])
+          : undefined,
+    });
+  }
   if (transaction) {
     transaction.status = statusFromCallback(callbackName, innerPayload);
     transaction.updatedAt = new Date().toISOString();
@@ -1336,6 +1562,131 @@ export async function processMpesaCallback(
   };
 }
 
+export async function reconcilePendingStkTransactions(options?: {
+  limit?: number;
+  minAgeMinutes?: number;
+  maxAgeMinutes?: number;
+}) {
+  const now = Date.now();
+  const limit = Math.max(1, Math.min(options?.limit ?? 20, 100));
+  const minAgeMinutes = Math.max(1, options?.minAgeMinutes ?? 5);
+  const maxAgeMinutes = Math.max(minAgeMinutes, options?.maxAgeMinutes ?? 24 * 60);
+  const minAgeMs = minAgeMinutes * 60 * 1000;
+  const maxAgeMs = maxAgeMinutes * 60 * 1000;
+  const transactions = (await listDatabaseTransactions(Math.max(limit * 5, 100)).catch(() => null)) ?? [];
+  const candidates = transactions
+    .filter((transaction) => shouldReconcilePendingStkTransaction(transaction, now, minAgeMs, maxAgeMs))
+    .slice(0, limit);
+
+  const summary = {
+    checked: candidates.length,
+    updated: 0,
+    stillPending: 0,
+    failedQueries: 0,
+    items: [] as Array<{
+      id: string;
+      providerRequestId?: string;
+      previousStatus: TransactionStatus;
+      status: TransactionStatus;
+      resultCode?: string;
+      outcome: "updated" | "still_pending" | "query_failed";
+      message?: string;
+    }>,
+  };
+
+  for (const transaction of candidates) {
+    const requestId = randomUUID();
+    const { path, requestPayload } = preparePayload("stkQuery", {
+      checkoutRequestId: transaction.providerRequestId,
+    });
+    const context = {
+      requestId,
+      applicationId: transaction.applicationId,
+      route: "/api/admin/mpesa/reconcile-pending-stk",
+      method: "POST",
+      startedAt: Date.now(),
+    } satisfies GatewayRequestContext;
+
+    try {
+      const upstream = await postToMpesa(path, requestPayload);
+      const response = normalizeSuccess("stkQuery", context, 200, upstream.data);
+      const resultPayload = sanitizeForLogs(upstream.data);
+      const nextStatus = statusFromStkQueryPayload(resultPayload, transaction.status);
+      const resultCode = readResultCode(resultPayload.ResultCode);
+
+      const requestLog = buildLogRecord(context, "stkQuery", response, requestPayload);
+      addRequestLog(requestLog);
+      await persistRequestLog(requestLog).catch((error) => {
+        logEvent("warn", "Unable to persist STK reconciliation request log", {
+          requestId,
+          checkoutRequestId: transaction.providerRequestId,
+          message: error instanceof Error ? error.message : "unknown",
+        });
+      });
+
+      if (!isTerminalTransactionStatus(nextStatus)) {
+        summary.stillPending += 1;
+        summary.items.push({
+          id: transaction.id,
+          providerRequestId: transaction.providerRequestId,
+          previousStatus: transaction.status,
+          status: transaction.status,
+          resultCode,
+          outcome: "still_pending",
+        });
+        continue;
+      }
+
+      const updatedTransaction = {
+        ...transaction,
+        status: nextStatus,
+        updatedAt: new Date().toISOString(),
+        callbackPayloads: [
+          buildReconciliationCallbackPayload(resultPayload),
+          ...transaction.callbackPayloads,
+        ],
+      } satisfies TransactionRecord;
+      upsertTransaction(updatedTransaction);
+      await persistDatabaseTransactionRecord(updatedTransaction, context).catch((error) => {
+        throw new Error(error instanceof Error ? error.message : "Unable to persist reconciled transaction");
+      });
+      await persistTransactionSnapshot(updatedTransaction).catch((error) => {
+        logEvent("warn", "Unable to persist reconciled transaction snapshot", {
+          requestId,
+          checkoutRequestId: transaction.providerRequestId,
+          message: error instanceof Error ? error.message : "unknown",
+        });
+      });
+      summary.updated += 1;
+      summary.items.push({
+        id: updatedTransaction.id,
+        providerRequestId: updatedTransaction.providerRequestId,
+        previousStatus: transaction.status,
+        status: updatedTransaction.status,
+        resultCode,
+        outcome: "updated",
+      });
+    } catch (error) {
+      summary.failedQueries += 1;
+      summary.items.push({
+        id: transaction.id,
+        providerRequestId: transaction.providerRequestId,
+        previousStatus: transaction.status,
+        status: transaction.status,
+        outcome: "query_failed",
+        message: error instanceof Error ? error.message : "unknown",
+      });
+      logEvent("warn", "STK reconciliation query failed", {
+        requestId,
+        checkoutRequestId: transaction.providerRequestId,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    }
+  }
+
+  return summary;
+}
+
 export async function getGatewayOverview(): Promise<GatewayOverview> {
   let oauthHealthy = false;
   try {
@@ -1379,7 +1730,7 @@ export async function getGatewayOverview(): Promise<GatewayOverview> {
       currency: snapshot.balanceCurrency,
       totalCurrent: snapshot.balanceTotalCurrent,
       totalAvailable: snapshot.balanceTotalAvailable,
-      updatedAt: snapshot.latestBalanceCallbackAt,
+      updatedAt: snapshot.projectionUpdatedAt,
       accountCount: snapshot.balanceAccountCount,
     },
     transactions: {

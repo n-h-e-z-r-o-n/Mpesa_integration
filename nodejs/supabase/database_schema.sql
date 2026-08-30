@@ -134,7 +134,7 @@ ON public.merchant_accounts (status);
 CREATE TABLE public.api_keys (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    merchant_id UUID NOT NULL
+    merchant_account_id UUID NOT NULL
         REFERENCES public.merchant_accounts(id)
         ON DELETE RESTRICT,
 
@@ -147,6 +147,11 @@ CREATE TABLE public.api_keys (
 
     key_hash TEXT NOT NULL UNIQUE,
 
+    scopes TEXT[] NOT NULL DEFAULT ARRAY[
+        'transactions:read',
+        'collections:create'
+    ],
+
     last_used_at TIMESTAMPTZ,
 
     expires_at TIMESTAMPTZ,
@@ -157,14 +162,14 @@ CREATE TABLE public.api_keys (
 );
 
 
-CREATE INDEX api_keys_merchant_idx
-ON public.api_keys (merchant_id);
+CREATE INDEX api_keys_merchant_account_idx
+ON public.api_keys (merchant_account_id);
 
 CREATE INDEX api_keys_lookup_idx
 ON public.api_keys (key_hash);
 
 CREATE INDEX api_keys_active_idx
-ON public.api_keys (merchant_id, environment)
+ON public.api_keys (merchant_account_id, environment)
 WHERE revoked_at IS NULL;
 
 
@@ -186,7 +191,7 @@ WHERE revoked_at IS NULL;
 CREATE TABLE public.webhooks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    merchant_id UUID NOT NULL
+    merchant_account_id UUID NOT NULL
         REFERENCES public.merchant_accounts(id)
         ON DELETE RESTRICT,
 
@@ -199,7 +204,9 @@ CREATE TABLE public.webhooks (
 
     subscribed_events TEXT[] NOT NULL DEFAULT ARRAY[
         'transaction.succeeded',
-        'transaction.failed'
+        'transaction.failed',
+        'transaction.cancelled',
+        'transaction.reversed'
     ],
 
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -209,11 +216,11 @@ CREATE TABLE public.webhooks (
 );
 
 
-CREATE INDEX webhooks_merchant_idx
-ON public.webhooks (merchant_id);
+CREATE INDEX webhooks_merchant_account_idx
+ON public.webhooks (merchant_account_id);
 
 CREATE INDEX webhooks_active_idx
-ON public.webhooks (merchant_id, environment)
+ON public.webhooks (merchant_account_id, environment)
 WHERE is_active = TRUE;
 
 
@@ -239,15 +246,17 @@ WHERE is_active = TRUE;
 CREATE TABLE public.transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    merchant_id UUID NOT NULL
+    merchant_account_id UUID NOT NULL
         REFERENCES public.merchant_accounts(id)
         ON DELETE RESTRICT,
-
-    application_id TEXT NOT NULL,
 
     api_key_id UUID
         REFERENCES public.api_keys(id)
         ON DELETE SET NULL,
+
+    original_transaction_id UUID
+        REFERENCES public.transactions(id)
+        ON DELETE RESTRICT,
 
     environment TEXT NOT NULL DEFAULT 'live'
         CHECK (environment IN ('sandbox', 'live')),
@@ -298,6 +307,7 @@ CREATE TABLE public.transactions (
 
     -- Protect against duplicate API requests
     idempotency_key TEXT,
+    idempotency_request_hash TEXT,
 
     -- Merchant/customer relationship
     customer_reference TEXT,
@@ -325,6 +335,7 @@ CREATE TABLE public.transactions (
     provider_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
     processing_started_at TIMESTAMPTZ,
 
@@ -332,26 +343,28 @@ CREATE TABLE public.transactions (
 );
 
 
-CREATE INDEX transactions_merchant_created_idx
-ON public.transactions (merchant_id, created_at DESC);
-
-CREATE INDEX transactions_application_created_idx
-ON public.transactions (application_id, created_at DESC);
+CREATE INDEX transactions_merchant_account_created_idx
+ON public.transactions (merchant_account_id, created_at DESC);
 
 CREATE INDEX transactions_status_idx
 ON public.transactions (status);
 
-CREATE INDEX transactions_provider_request_idx
-ON public.transactions (provider, provider_request_id);
-
 CREATE INDEX transactions_external_reference_idx
-ON public.transactions (merchant_id, external_reference);
+ON public.transactions (merchant_account_id, external_reference);
 
 
 -- Prevent duplicate merchant API requests
 CREATE UNIQUE INDEX transactions_idempotency_unique
-ON public.transactions (merchant_id, idempotency_key)
+ON public.transactions (merchant_account_id, environment, idempotency_key)
 WHERE idempotency_key IS NOT NULL;
+
+CREATE INDEX transactions_original_transaction_idx
+ON public.transactions (original_transaction_id)
+WHERE original_transaction_id IS NOT NULL;
+
+CREATE UNIQUE INDEX transactions_provider_request_unique
+ON public.transactions (provider, environment, provider_request_id)
+WHERE provider_request_id IS NOT NULL;
 
 
 -- Provider transaction IDs should normally be unique
@@ -398,7 +411,7 @@ CREATE TABLE public.provider_events (
 
     event_type TEXT NOT NULL,
 
-    merchant_id UUID
+    merchant_account_id UUID
         REFERENCES public.merchant_accounts(id)
         ON DELETE RESTRICT,
 
@@ -440,6 +453,10 @@ ON public.provider_events (
     provider,
     provider_request_id
 );
+
+CREATE UNIQUE INDEX provider_events_payload_hash_unique
+ON public.provider_events (provider, event_type, payload_hash)
+WHERE payload_hash IS NOT NULL;
 
 CREATE INDEX provider_events_received_idx
 ON public.provider_events (received_at DESC);
@@ -602,6 +619,11 @@ BEFORE UPDATE ON public.webhooks
 FOR EACH ROW
 EXECUTE FUNCTION public.set_updated_at();
 
+CREATE TRIGGER transactions_set_updated_at
+BEFORE UPDATE ON public.transactions
+FOR EACH ROW
+EXECUTE FUNCTION public.set_updated_at();
+
 
 
 -- ============================================================
@@ -697,7 +719,7 @@ AS $$
 $$;
 
 
-CREATE OR REPLACE FUNCTION public.current_merchant_id()
+CREATE OR REPLACE FUNCTION public.current_merchant_account_id()
 RETURNS UUID
 LANGUAGE sql
 STABLE
@@ -735,7 +757,7 @@ SET search_path = public
 AS $$
     SELECT CASE
         WHEN public.is_admin() THEN 'admin'
-        WHEN public.current_merchant_id() IS NOT NULL THEN 'merchant'
+        WHEN public.current_merchant_account_id() IS NOT NULL THEN 'merchant'
         ELSE 'onboarding'
     END;
 $$;
@@ -783,7 +805,7 @@ CREATE OR REPLACE FUNCTION public.register_new_user(
 )
 RETURNS TABLE (
     user_id UUID,
-    merchant_id UUID,
+    merchant_account_id UUID,
     dashboard_type TEXT,
     dashboard_route TEXT
 )
@@ -793,7 +815,7 @@ SET search_path = public
 AS $$
 DECLARE
     v_user_id UUID;
-    v_merchant_id UUID;
+    v_merchant_account_id UUID;
     v_business_name TEXT;
     v_business_email TEXT;
     v_business_phone TEXT;
@@ -826,12 +848,12 @@ BEGIN
     WHERE id = v_user_id;
 
     SELECT id
-    INTO v_merchant_id
+    INTO v_merchant_account_id
     FROM public.merchant_accounts
     WHERE owner_user_id = v_user_id
     LIMIT 1;
 
-    IF v_merchant_id IS NULL THEN
+    IF v_merchant_account_id IS NULL THEN
         IF v_business_name IS NULL THEN
             RAISE EXCEPTION 'business_name is required';
         END IF;
@@ -852,7 +874,7 @@ BEGIN
             v_default_currency,
             'pending'
         )
-        RETURNING id INTO v_merchant_id;
+        RETURNING id INTO v_merchant_account_id;
     ELSE
         UPDATE public.merchant_accounts
         SET
@@ -861,13 +883,13 @@ BEGIN
             business_phone = COALESCE(v_business_phone, business_phone),
             default_currency = COALESCE(v_default_currency, default_currency),
             updated_at = now()
-        WHERE id = v_merchant_id;
+        WHERE id = v_merchant_account_id;
     END IF;
 
     RETURN QUERY
     SELECT
         v_user_id,
-        v_merchant_id,
+        v_merchant_account_id,
         public.resolve_dashboard_type(),
         public.resolve_dashboard_route();
 END;
@@ -876,7 +898,7 @@ $$;
 
 REVOKE ALL ON FUNCTION public.current_user_id() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.is_admin() FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.current_merchant_id() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.current_merchant_account_id() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.resolve_dashboard_type() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.resolve_dashboard_route() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.register_new_user(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC;
@@ -887,7 +909,7 @@ TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_admin()
 TO authenticated;
 
-GRANT EXECUTE ON FUNCTION public.current_merchant_id()
+GRANT EXECUTE ON FUNCTION public.current_merchant_account_id()
 TO authenticated;
 
 GRANT EXECUTE ON FUNCTION public.resolve_dashboard_type()
@@ -994,7 +1016,7 @@ ON public.api_keys
 FOR SELECT
 TO authenticated
 USING (
-    merchant_id = public.current_merchant_id()
+    merchant_account_id = public.current_merchant_account_id()
     OR public.is_admin()
 );
 
@@ -1009,7 +1031,7 @@ ON public.webhooks
 FOR SELECT
 TO authenticated
 USING (
-    merchant_id = public.current_merchant_id()
+    merchant_account_id = public.current_merchant_account_id()
     OR public.is_admin()
 );
 
@@ -1024,7 +1046,7 @@ ON public.transactions
 FOR SELECT
 TO authenticated
 USING (
-    merchant_id = public.current_merchant_id()
+    merchant_account_id = public.current_merchant_account_id()
     OR public.is_admin()
 );
 
@@ -1059,7 +1081,7 @@ USING (
         SELECT 1
         FROM public.webhooks w
         WHERE w.id = webhook_deliveries.webhook_id
-          AND w.merchant_id = public.current_merchant_id()
+          AND w.merchant_account_id = public.current_merchant_account_id()
     )
 );
 
@@ -1093,6 +1115,52 @@ REVOKE ALL ON public.transactions FROM anon;
 REVOKE ALL ON public.provider_events FROM anon;
 REVOKE ALL ON public.webhook_deliveries FROM anon;
 REVOKE ALL ON public.audit_logs FROM anon;
+
+
+-- ------------------------------------------------------------
+-- SERVICE ROLE BACKEND ACCESS
+-- ------------------------------------------------------------
+--
+-- The Node gateway uses the Supabase service-role key for
+-- transaction persistence, callback persistence, reconciliation,
+-- and admin console data loading. Grant explicit backend access
+-- on a fresh database instead of relying on implicit defaults.
+-- ------------------------------------------------------------
+
+GRANT USAGE ON SCHEMA public
+TO service_role;
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON public.users
+TO service_role;
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON public.merchant_accounts
+TO service_role;
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON public.api_keys
+TO service_role;
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON public.webhooks
+TO service_role;
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON public.transactions
+TO service_role;
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON public.provider_events
+TO service_role;
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON public.webhook_deliveries
+TO service_role;
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON public.audit_logs
+TO service_role;
 
 
 -- ------------------------------------------------------------
@@ -1159,10 +1227,11 @@ FROM authenticated;
 
 GRANT SELECT (
     id,
-    merchant_id,
+    merchant_account_id,
     name,
     environment,
     key_prefix,
+    scopes,
     last_used_at,
     expires_at,
     revoked_at,
@@ -1185,7 +1254,7 @@ FROM authenticated;
 
 GRANT SELECT (
     id,
-    merchant_id,
+    merchant_account_id,
     url,
     environment,
     subscribed_events,

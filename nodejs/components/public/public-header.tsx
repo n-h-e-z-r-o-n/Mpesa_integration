@@ -11,7 +11,7 @@ const navigation = [
   { href: "/#products", label: "Products" },
   { href: "/#developers", label: "Developers" },
   { href: "/#solutions", label: "Solutions" },
-  { href: "/#pricing", label: "Pricing" },
+  { href: "/pricing", label: "Pricing" },
   { href: "/#company", label: "Company" },
 ];
 

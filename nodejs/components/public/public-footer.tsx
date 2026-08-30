@@ -38,8 +38,8 @@ export function PublicFooter() {
               <Link href="/#developers" className="block text-sm hover:text-white">
                 Transactions
               </Link>
-              <Link href="/#pricing" className="block text-sm hover:text-white">
-                Monitoring
+              <Link href="/pricing" className="block text-sm hover:text-white">
+                Pricing
               </Link>
             </div>
           </div>
