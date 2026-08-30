@@ -1,3 +1,5 @@
+import { unstable_noStore as noStore } from "next/cache";
+
 import Link from "next/link";
 
 import { ProviderStatus } from "@/components/dashboard/provider-status";
@@ -5,9 +7,13 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { TransactionTable } from "@/components/transactions/transaction-table";
 import { listStoredCallbacks } from "@/lib/repositories/callback-store";
-import { listStoredRequestLogs, listStoredTransactions } from "@/lib/repositories/telemetry-store";
+import { listStoredRequestLogs } from "@/lib/repositories/telemetry-store";
+import { listDatabaseTransactions } from "@/lib/repositories/transaction-store";
 import { getGatewayOverview } from "@/services/mpesa/service";
 import type { CallbackRecord, RequestLogRecord, TransactionRecord } from "@/types/gateway";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function formatPercent(value: number) {
   return `${Math.round(value)}%`;
@@ -37,10 +43,12 @@ function formatAgeMinutes(value?: number) {
 }
 
 export default async function DashboardPage() {
+  noStore();
+
   const [overview, storedCallbacks, storedTransactions, storedRequestLogs] = await Promise.all([
     getGatewayOverview(),
     listStoredCallbacks(25).catch(() => null),
-    listStoredTransactions(50).catch(() => null),
+    listDatabaseTransactions(50).catch(() => null),
     listStoredRequestLogs(25).catch(() => null),
   ]);
   const callbacks: CallbackRecord[] = storedCallbacks ?? [];

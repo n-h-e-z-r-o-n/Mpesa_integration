@@ -1,10 +1,22 @@
+import { unstable_noStore as noStore } from "next/cache";
+
 import { TransactionExplorer } from "@/components/transactions/transaction-explorer";
-import { listStoredTransactions } from "@/lib/repositories/telemetry-store";
+import { listDatabaseTransactions } from "@/lib/repositories/transaction-store";
 import type { TransactionRecord } from "@/types/gateway";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function TransactionsPage() {
-  const transactions: TransactionRecord[] =
-    (await listStoredTransactions().catch(() => null)) ?? [];
+  noStore();
+
+  let transactions: TransactionRecord[] = [];
+  try {
+    transactions = (await listDatabaseTransactions()) ?? [];
+  } catch (error) {
+    console.error("Unable to load database transactions for /transactions", error);
+  }
+
   return (
     <div className="space-y-6">
       <div>

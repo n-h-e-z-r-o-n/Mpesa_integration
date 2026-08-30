@@ -44,6 +44,9 @@ describe("M-Pesa gateway", () => {
     vi.doUnmock("@/lib/repositories/admin-dashboard-store");
     vi.doUnmock("@/lib/repositories/callback-store");
     vi.doUnmock("@/lib/repositories/telemetry-store");
+    vi.doUnmock("@/lib/repositories/transaction-store");
+    vi.doUnmock("@/lib/repositories/transaction-write-store");
+    vi.doUnmock("@/lib/mpesa/client");
   });
 
   test("caches OAuth tokens until expiry", async () => {
@@ -153,6 +156,219 @@ describe("M-Pesa gateway", () => {
     expect(payload.TransactionDesc).toBe("Testpayment");
     expect(result.success).toBe(true);
     expect(result.status).toBe("pending");
+  });
+
+  test("precreates and then updates the same database transaction around an outbound payment", async () => {
+    const persistDatabaseTransactionRecord = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: "db-transaction-1",
+        merchantId: "11111111-1111-4111-8111-111111111111",
+      })
+      .mockResolvedValueOnce({
+        id: "db-transaction-1",
+        merchantId: "11111111-1111-4111-8111-111111111111",
+      });
+    const persistTransactionSnapshot = vi.fn().mockResolvedValue(undefined);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "token-1", expires_in: 3600 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ResponseCode: "0",
+            ResponseDescription: "Success. Request accepted for processing",
+            MerchantRequestID: "mid-1",
+            CheckoutRequestID: "ws_CO_1",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+    vi.doMock("@/lib/repositories/transaction-write-store", () => ({
+      findDatabaseTransactionForCallbackPayload: async () => null,
+      persistDatabaseTransactionRecord,
+    }));
+    vi.doMock("@/lib/repositories/telemetry-store", async () => {
+      const actual = await vi.importActual<typeof import("@/lib/repositories/telemetry-store")>(
+        "@/lib/repositories/telemetry-store",
+      );
+
+      return {
+        ...actual,
+        persistRequestLog: async () => undefined,
+        persistTransactionSnapshot,
+      };
+    });
+
+    const { executeMpesaOperation } = await import("@/services/mpesa/service");
+    await executeMpesaOperation(
+      "stkPush",
+      {
+        phoneNumber: "0714 415 034",
+        amount: 10,
+        accountReference: "INV-1001",
+        transactionDesc: "Test payment",
+      },
+      {
+        requestId: "req-1",
+        applicationId: "admin-console",
+        merchantId: "11111111-1111-4111-8111-111111111111",
+        route: "/api/mpesa/stk-push",
+        method: "POST",
+        startedAt: Date.now(),
+      },
+    );
+
+    expect(persistDatabaseTransactionRecord).toHaveBeenCalledTimes(2);
+    expect(persistDatabaseTransactionRecord).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        id: "req-1",
+        requestId: "req-1",
+        applicationId: "admin-console",
+        status: "pending",
+        amount: 10,
+        accountReference: "INV1001",
+      }),
+      expect.objectContaining({
+        requestId: "req-1",
+        applicationId: "admin-console",
+        merchantId: "11111111-1111-4111-8111-111111111111",
+      }),
+    );
+    expect(persistDatabaseTransactionRecord).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        id: "req-1",
+        requestId: "req-1",
+        applicationId: "admin-console",
+        status: "pending",
+        providerRequestId: "ws_CO_1",
+        accountReference: "INV1001",
+        responsePayload: expect.objectContaining({
+          CheckoutRequestID: "ws_CO_1",
+          MerchantRequestID: "mid-1",
+        }),
+      }),
+      expect.objectContaining({
+        requestId: "req-1",
+        applicationId: "admin-console",
+        merchantId: "11111111-1111-4111-8111-111111111111",
+      }),
+      {
+        id: "db-transaction-1",
+        merchantId: "11111111-1111-4111-8111-111111111111",
+      },
+    );
+    expect(persistTransactionSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "req-1",
+        providerRequestId: "ws_CO_1",
+      }),
+    );
+  });
+
+  test("marks a precreated transaction as failed when the outbound provider call throws", async () => {
+    const persistDatabaseTransactionRecord = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: "db-transaction-2",
+        merchantId: "11111111-1111-4111-8111-111111111111",
+      })
+      .mockResolvedValueOnce({
+        id: "db-transaction-2",
+        merchantId: "11111111-1111-4111-8111-111111111111",
+      });
+    const persistTransactionSnapshot = vi.fn().mockResolvedValue(undefined);
+
+    vi.doMock("@/lib/mpesa/client", () => ({
+      postToMpesa: vi.fn().mockRejectedValue(
+        Object.assign(new Error("Safaricom request failed"), {
+          code: "mpesa_request_failed",
+          status: 502,
+          upstream: {
+            errorCode: "500.001.1001",
+            errorMessage: "Temporary provider failure",
+          },
+        }),
+      ),
+    }));
+    vi.doMock("@/lib/repositories/transaction-write-store", () => ({
+      findDatabaseTransactionForCallbackPayload: async () => null,
+      persistDatabaseTransactionRecord,
+    }));
+    vi.doMock("@/lib/repositories/telemetry-store", async () => {
+      const actual = await vi.importActual<typeof import("@/lib/repositories/telemetry-store")>(
+        "@/lib/repositories/telemetry-store",
+      );
+
+      return {
+        ...actual,
+        persistRequestLog: async () => undefined,
+        persistTransactionSnapshot,
+      };
+    });
+
+    const { executeMpesaOperation } = await import("@/services/mpesa/service");
+
+    await expect(
+      executeMpesaOperation(
+        "stkPush",
+        {
+          phoneNumber: "0714 415 034",
+          amount: 10,
+          accountReference: "INV-1002",
+          transactionDesc: "Failure path",
+        },
+        {
+          requestId: "req-failed",
+          applicationId: "admin-console",
+          merchantId: "11111111-1111-4111-8111-111111111111",
+          route: "/api/mpesa/stk-push",
+          method: "POST",
+          startedAt: Date.now(),
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: "mpesa_request_failed",
+      status: 502,
+    });
+
+    expect(persistDatabaseTransactionRecord).toHaveBeenCalledTimes(2);
+    expect(persistDatabaseTransactionRecord).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        id: "req-failed",
+        status: "failed",
+        responsePayload: expect.objectContaining({
+          message: "Safaricom request failed",
+        }),
+      }),
+      expect.objectContaining({
+        requestId: "req-failed",
+        applicationId: "admin-console",
+      }),
+      {
+        id: "db-transaction-2",
+        merchantId: "11111111-1111-4111-8111-111111111111",
+      },
+    );
+    expect(persistTransactionSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "req-failed",
+        status: "failed",
+      }),
+    );
   });
 
   test("supports idempotent replay and conflict detection", async () => {
@@ -358,6 +574,24 @@ describe("M-Pesa gateway", () => {
   test("reconciles callbacks against persisted transactions when runtime memory is empty", async () => {
     const persistTransactionSnapshot = vi.fn().mockResolvedValue(undefined);
 
+    vi.doMock("@/lib/repositories/transaction-store", () => ({
+      listDatabaseTransactions: async () => [
+        {
+          id: "ws_CO_persisted",
+          requestId: "req-persisted",
+          provider: "mpesa" as const,
+          operation: "stkPush" as const,
+          applicationId: "admin-console",
+          status: "pending" as const,
+          createdAt: "2026-08-29T18:10:00.000Z",
+          updatedAt: "2026-08-29T18:10:00.000Z",
+          requestPayload: { Amount: 125 },
+          responsePayload: { CheckoutRequestID: "ws_CO_persisted" },
+          callbackPayloads: [],
+        },
+      ],
+    }));
+
     vi.doMock("@/lib/repositories/telemetry-store", async () => {
       const actual = await vi.importActual<typeof import("@/lib/repositories/telemetry-store")>(
         "@/lib/repositories/telemetry-store",
@@ -365,21 +599,6 @@ describe("M-Pesa gateway", () => {
 
       return {
         ...actual,
-        listStoredTransactions: async () => [
-          {
-            id: "ws_CO_persisted",
-            requestId: "req-persisted",
-            provider: "mpesa" as const,
-            operation: "stkPush" as const,
-            applicationId: "admin-console",
-            status: "pending" as const,
-            createdAt: "2026-08-29T18:10:00.000Z",
-            updatedAt: "2026-08-29T18:10:00.000Z",
-            requestPayload: { Amount: 125 },
-            responsePayload: { CheckoutRequestID: "ws_CO_persisted" },
-            callbackPayloads: [],
-          },
-        ],
         persistRequestLog: async () => undefined,
         persistTransactionSnapshot,
       };
@@ -406,6 +625,90 @@ describe("M-Pesa gateway", () => {
     expect(persistTransactionSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         id: "ws_CO_persisted",
+        status: "succeeded",
+      }),
+    );
+  });
+
+  test("materializes a database transaction directly from a callback when no prior transaction exists", async () => {
+    const persistTransactionSnapshot = vi.fn().mockResolvedValue(undefined);
+    const persistDatabaseTransactionRecord = vi.fn().mockResolvedValue({
+      id: "db-transaction-3",
+      merchantId: "33333333-3333-4333-8333-333333333333",
+    });
+    const persistCallbackRecord = vi.fn().mockResolvedValue("provider-event-3");
+    const linkStoredCallbackToTransaction = vi.fn().mockResolvedValue(undefined);
+
+    vi.doMock("@/lib/repositories/telemetry-store", async () => {
+      const actual = await vi.importActual<typeof import("@/lib/repositories/telemetry-store")>(
+        "@/lib/repositories/telemetry-store",
+      );
+
+      return {
+        ...actual,
+        persistRequestLog: async () => undefined,
+        persistTransactionSnapshot,
+      };
+    });
+
+    vi.doMock("@/lib/repositories/callback-store", () => ({
+      persistCallbackRecord,
+      linkStoredCallbackToTransaction,
+    }));
+
+    vi.doMock("@/lib/repositories/transaction-write-store", () => ({
+      findDatabaseTransactionForCallbackPayload: async () => null,
+      persistDatabaseTransactionRecord,
+    }));
+
+    const { processMpesaCallback } = await import("@/services/mpesa/service");
+
+    await processMpesaCallback(
+      "pullTransactions",
+      {
+        TransID: "QWE123ABC",
+        TransAmount: "125.50",
+        MSISDN: "254700000001",
+        BillRefNumber: "INV-1001",
+      },
+      "127.0.0.1",
+    );
+
+    expect(persistCallbackRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        callbackName: "pullTransactions",
+      }),
+    );
+    expect(persistDatabaseTransactionRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "QWE123ABC",
+        applicationId: "safaricom",
+        operation: "pullTransactions",
+        status: "succeeded",
+        amount: 125.5,
+        partyA: "254700000001",
+        partyB: "174379",
+        accountReference: "INV-1001",
+        transactionId: "QWE123ABC",
+        providerRequestId: "QWE123ABC",
+        callbackPayloads: [expect.objectContaining({ TransID: "QWE123ABC" })],
+      }),
+      expect.objectContaining({
+        applicationId: "safaricom",
+        merchantId: undefined,
+        route: "/api/mpesa/callbacks/pullTransactions",
+        method: "POST",
+      }),
+      null,
+    );
+    expect(linkStoredCallbackToTransaction).toHaveBeenCalledWith(
+      "provider-event-3",
+      "db-transaction-3",
+      "33333333-3333-4333-8333-333333333333",
+    );
+    expect(persistTransactionSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "QWE123ABC",
         status: "succeeded",
       }),
     );

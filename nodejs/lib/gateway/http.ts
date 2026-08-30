@@ -103,6 +103,7 @@ export async function handleApplicationOperation(request: NextRequest, operation
     const context = {
       requestId,
       applicationId: application.id,
+      merchantId: application.merchantId,
       route: request.nextUrl.pathname,
       method: request.method,
       startedAt,
@@ -199,11 +200,13 @@ export async function handleAdminOperation(request: NextRequest, operation: Mpes
     const context = {
       requestId,
       applicationId: "admin-console",
+      merchantId: undefined,
       route: request.nextUrl.pathname,
       method: request.method,
       startedAt,
       idempotencyKey: request.headers.get("Idempotency-Key") ?? undefined,
       adminUser: session.email,
+      adminUserId: session.id,
     };
 
     const definition = getOperationDefinition(operation);
@@ -239,6 +242,7 @@ export async function handleAdminOperation(request: NextRequest, operation: Mpes
       method: request.method,
       startedAt,
       adminUser: session.email,
+      adminUserId: session.id,
     };
     const normalized = normalizeError(error instanceof ZodError ? toValidationError(error) : error, operation, context);
     const requestLog = {

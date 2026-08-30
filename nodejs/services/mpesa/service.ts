@@ -22,13 +22,18 @@ import {
 import { logEvent, sanitizeForLogs } from "@/lib/logger";
 import { getAdminDashboardSnapshot } from "@/lib/repositories/admin-dashboard-store";
 import {
+  linkStoredCallbackToTransaction,
   persistCallbackRecord,
 } from "@/lib/repositories/callback-store";
 import {
-  listStoredTransactions,
   persistRequestLog,
   persistTransactionSnapshot,
 } from "@/lib/repositories/telemetry-store";
+import { listDatabaseTransactions } from "@/lib/repositories/transaction-store";
+import {
+  findDatabaseTransactionForCallbackPayload,
+  persistDatabaseTransactionRecord,
+} from "@/lib/repositories/transaction-write-store";
 import {
   addCallback,
   addRequestLog,
@@ -192,53 +197,162 @@ function unwrapNestedPayload(input: Record<string, unknown>) {
   return { ...input };
 }
 
+function readNumericRequestField(payload: Record<string, unknown>, key: string) {
+  const value = payload[key];
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return undefined;
+}
+
+function readStringRequestField(payload: Record<string, unknown>, key: string) {
+  return typeof payload[key] === "string" && payload[key].trim()
+    ? payload[key]
+    : typeof payload[key] === "number"
+      ? String(payload[key])
+      : undefined;
+}
+
+function inferTransactionParties(requestPayload: Record<string, unknown>) {
+  return {
+    partyA:
+      readStringRequestField(requestPayload, "PartyA") ??
+      readStringRequestField(requestPayload, "PhoneNumber") ??
+      readStringRequestField(requestPayload, "Msisdn"),
+    partyB:
+      readStringRequestField(requestPayload, "PartyB") ??
+      readStringRequestField(requestPayload, "ShortCode") ??
+      readStringRequestField(requestPayload, "ReceiverParty"),
+  };
+}
+
+function inferInitialProviderRequestId(requestPayload: Record<string, unknown>) {
+  return (
+    readStringRequestField(requestPayload, "OriginatorConversationID") ??
+    readStringRequestField(requestPayload, "ConversationID") ??
+    readStringRequestField(requestPayload, "CheckoutRequestID")
+  );
+}
+
+function inferAccountReference(requestPayload: Record<string, unknown>) {
+  return (
+    readStringRequestField(requestPayload, "AccountReference") ??
+    readStringRequestField(requestPayload, "BillRefNumber")
+  );
+}
+
+function buildInitialTransactionRecord(
+  operation: MpesaOperation,
+  context: GatewayRequestContext,
+  requestPayload: Record<string, unknown>,
+) {
+  const now = new Date().toISOString();
+  const { partyA, partyB } = inferTransactionParties(requestPayload);
+
+  return {
+    id: context.requestId,
+    requestId: context.requestId,
+    provider: "mpesa" as const,
+    operation,
+    applicationId: context.applicationId,
+    status: "pending" as const,
+    amount: readNumericRequestField(requestPayload, "Amount"),
+    partyA,
+    partyB,
+    accountReference: inferAccountReference(requestPayload),
+    providerRequestId: inferInitialProviderRequestId(requestPayload),
+    providerOriginatorConversationId: readStringRequestField(requestPayload, "OriginatorConversationID"),
+    idempotencyKey: context.idempotencyKey,
+    createdAt: now,
+    updatedAt: now,
+    requestPayload: sanitizeForLogs(requestPayload),
+    callbackPayloads: [],
+  } satisfies TransactionRecord;
+}
+
 function buildTransactionRecord(
   operation: MpesaOperation,
   context: GatewayRequestContext,
   requestPayload: Record<string, unknown>,
   responsePayload: Record<string, unknown>,
   status: TransactionStatus,
+  existingRecord?: TransactionRecord,
 ) {
   const now = new Date().toISOString();
   const checkoutId =
     typeof responsePayload.CheckoutRequestID === "string" ? responsePayload.CheckoutRequestID : undefined;
+  const merchantRequestId =
+    typeof responsePayload.MerchantRequestID === "string" ? responsePayload.MerchantRequestID : undefined;
+  const { partyA, partyB } = inferTransactionParties(requestPayload);
 
   return {
-    id: checkoutId ?? context.requestId,
+    id: existingRecord?.id ?? context.requestId,
     requestId: context.requestId,
     provider: "mpesa" as const,
     operation,
     applicationId: context.applicationId,
     status,
-    amount: typeof requestPayload.Amount === "number" ? requestPayload.Amount : undefined,
-    partyA: typeof requestPayload.PartyA === "string" ? requestPayload.PartyA : undefined,
-    partyB:
-      typeof requestPayload.PartyB === "string"
-        ? requestPayload.PartyB
-        : typeof requestPayload.PartyB === "number"
-          ? String(requestPayload.PartyB)
-          : undefined,
-    accountReference:
-      typeof requestPayload.AccountReference === "string" ? requestPayload.AccountReference : undefined,
-    transactionId: inferTransactionId(responsePayload),
+    amount: existingRecord?.amount ?? readNumericRequestField(requestPayload, "Amount"),
+    partyA: existingRecord?.partyA ?? partyA,
+    partyB: existingRecord?.partyB ?? partyB,
+    accountReference: existingRecord?.accountReference ?? inferAccountReference(requestPayload),
+    transactionId: inferTransactionId(responsePayload) ?? existingRecord?.transactionId,
     providerRequestId:
-      typeof responsePayload.MerchantRequestID === "string"
-        ? responsePayload.MerchantRequestID
-        : typeof responsePayload.OriginatorConversationID === "string"
-          ? responsePayload.OriginatorConversationID
-          : undefined,
-    providerConversationId:
-      typeof responsePayload.ConversationID === "string" ? responsePayload.ConversationID : undefined,
-    providerOriginatorConversationId:
-      typeof responsePayload.OriginatorConversationID === "string"
+      checkoutId ??
+      merchantRequestId ??
+      (typeof responsePayload.OriginatorConversationID === "string"
         ? responsePayload.OriginatorConversationID
-        : undefined,
+        : undefined) ??
+      existingRecord?.providerRequestId,
+    providerConversationId:
+      (typeof responsePayload.ConversationID === "string" ? responsePayload.ConversationID : undefined) ??
+      existingRecord?.providerConversationId,
+    providerOriginatorConversationId:
+      (typeof responsePayload.OriginatorConversationID === "string"
+        ? responsePayload.OriginatorConversationID
+        : undefined) ?? existingRecord?.providerOriginatorConversationId,
     idempotencyKey: context.idempotencyKey,
-    createdAt: now,
+    createdAt: existingRecord?.createdAt ?? now,
     updatedAt: now,
-    requestPayload: sanitizeForLogs(requestPayload),
+    requestPayload: existingRecord?.requestPayload ?? sanitizeForLogs(requestPayload),
     responsePayload: sanitizeForLogs(responsePayload),
-    callbackPayloads: [],
+    callbackPayloads: existingRecord?.callbackPayloads ?? [],
+  } satisfies TransactionRecord;
+}
+
+function buildFailedTransactionRecord(record: TransactionRecord, error: unknown) {
+  const errorPayload =
+    error instanceof GatewayError
+      ? {
+          code: error.code,
+          message: error.message,
+          details: sanitizeForLogs(error.details ?? {}),
+        }
+      : error instanceof MpesaError
+        ? {
+            code: error.code,
+            message: error.message,
+            providerCode: extractProviderCode(error.upstream),
+            providerMessage: extractProviderMessage(error.upstream),
+            upstream: sanitizeForLogs(error.upstream ?? {}),
+          }
+        : {
+            message: error instanceof Error ? error.message : "Unknown gateway failure",
+          };
+
+  return {
+    ...record,
+    status: "failed" as const,
+    updatedAt: new Date().toISOString(),
+    responsePayload: errorPayload,
   } satisfies TransactionRecord;
 }
 
@@ -680,37 +794,86 @@ export async function executeMpesaOperation(
   }
 
   const { path, requestPayload } = preparePayload(operation, input);
-  const upstream = await postToMpesa(path, requestPayload);
-  const response = normalizeSuccess(operation, context, operation === "stkPush" ? 202 : 200, upstream.data);
-  const record = buildTransactionRecord(operation, context, requestPayload, upstream.data, response.status);
-  upsertTransaction(record);
-  await persistTransactionSnapshot(record).catch((error) => {
-    logEvent("warn", "Unable to persist transaction snapshot", {
+  const initialRecord = buildInitialTransactionRecord(operation, context, requestPayload);
+  upsertTransaction(initialRecord);
+  const persistedDatabaseTransaction = await persistDatabaseTransactionRecord(initialRecord, context).catch((error) => {
+    logEvent("warn", "Unable to persist transaction record", {
       requestId: context.requestId,
       operation,
       message: error instanceof Error ? error.message : "unknown",
     });
+    return null;
   });
 
-  const requestLog = buildLogRecord(context, operation, response, requestPayload);
-  addRequestLog(requestLog);
-  await persistRequestLog(requestLog).catch((error) => {
-    logEvent("warn", "Unable to persist request log", {
+  try {
+    const upstream = await postToMpesa(path, requestPayload);
+    const response = normalizeSuccess(operation, context, operation === "stkPush" ? 202 : 200, upstream.data);
+    const record = buildTransactionRecord(
+      operation,
+      context,
+      requestPayload,
+      upstream.data,
+      response.status,
+      initialRecord,
+    );
+    upsertTransaction(record);
+    await persistDatabaseTransactionRecord(record, context, persistedDatabaseTransaction).catch((error) => {
+      logEvent("warn", "Unable to persist transaction record", {
+        requestId: context.requestId,
+        operation,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    });
+    await persistTransactionSnapshot(record).catch((error) => {
+      logEvent("warn", "Unable to persist transaction snapshot", {
+        requestId: context.requestId,
+        operation,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    });
+
+    const requestLog = buildLogRecord(context, operation, response, requestPayload);
+    addRequestLog(requestLog);
+    await persistRequestLog(requestLog).catch((error) => {
+      logEvent("warn", "Unable to persist request log", {
+        requestId: context.requestId,
+        operation,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    });
+    logEvent("info", "M-Pesa operation executed", {
       requestId: context.requestId,
       operation,
-      message: error instanceof Error ? error.message : "unknown",
+      applicationId: context.applicationId,
+      status: response.status,
+      responseCode: response.upstream?.responseCode,
+      conversationId: response.upstream?.conversationId,
+      latencyMs: response.meta?.latencyMs,
     });
-  });
-  logEvent("info", "M-Pesa operation executed", {
-    requestId: context.requestId,
-    operation,
-    applicationId: context.applicationId,
-    status: response.status,
-    responseCode: response.upstream?.responseCode,
-    conversationId: response.upstream?.conversationId,
-    latencyMs: response.meta?.latencyMs,
-  });
-  return response;
+    return response;
+  } catch (error) {
+    const failedRecord = buildFailedTransactionRecord(initialRecord, error);
+    upsertTransaction(failedRecord);
+    await persistDatabaseTransactionRecord(
+      failedRecord,
+      context,
+      persistedDatabaseTransaction,
+    ).catch((persistError) => {
+      logEvent("warn", "Unable to persist failed transaction record", {
+        requestId: context.requestId,
+        operation,
+        message: persistError instanceof Error ? persistError.message : "unknown",
+      });
+    });
+    await persistTransactionSnapshot(failedRecord).catch((persistError) => {
+      logEvent("warn", "Unable to persist failed transaction snapshot", {
+        requestId: context.requestId,
+        operation,
+        message: persistError instanceof Error ? persistError.message : "unknown",
+      });
+    });
+    throw error;
+  }
 }
 
 function readCallbackPayload(payload: Record<string, unknown>) {
@@ -727,6 +890,219 @@ function readCallbackPayload(payload: Record<string, unknown>) {
   }
 
   return payload;
+}
+
+function readCallbackMetadataItems(payload: Record<string, unknown>) {
+  const callbackMetadata = payload.CallbackMetadata;
+  if (!callbackMetadata || typeof callbackMetadata !== "object") {
+    return [];
+  }
+
+  const items = (callbackMetadata as Record<string, unknown>).Item;
+  if (Array.isArray(items)) {
+    return items.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>;
+  }
+
+  if (items && typeof items === "object") {
+    return [items as Record<string, unknown>];
+  }
+
+  return [];
+}
+
+function inferCallbackTransactionId(payload: Record<string, unknown>) {
+  const directTransactionId = inferTransactionId(payload);
+  if (directTransactionId) {
+    return directTransactionId;
+  }
+
+  const directReceiptId =
+    typeof payload.TransID === "string"
+      ? payload.TransID
+      : typeof payload.MpesaReceiptNumber === "string"
+        ? payload.MpesaReceiptNumber
+        : undefined;
+  if (directReceiptId) {
+    return directReceiptId;
+  }
+
+  const receiptMatch = readCallbackMetadataItems(payload).find(
+    (item) =>
+      typeof item.Key === "string" &&
+      ["MpesaReceiptNumber", "TransactionID"].includes(item.Key) &&
+      typeof item.Value === "string",
+  );
+
+  return typeof receiptMatch?.Value === "string" ? receiptMatch.Value : undefined;
+}
+
+function readCallbackResultParameterItems(payload: Record<string, unknown>) {
+  const resultParameters = payload.ResultParameters;
+  if (!resultParameters || typeof resultParameters !== "object") {
+    return [];
+  }
+
+  const items = (resultParameters as Record<string, unknown>).ResultParameter;
+  if (Array.isArray(items)) {
+    return items.filter((item) => item && typeof item === "object") as Array<Record<string, unknown>>;
+  }
+
+  if (items && typeof items === "object") {
+    return [items as Record<string, unknown>];
+  }
+
+  return [];
+}
+
+function readCallbackNamedValue(payload: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = payload[key];
+    if (value !== undefined && value !== null && value !== "") {
+      return value;
+    }
+  }
+
+  const items = [...readCallbackMetadataItems(payload), ...readCallbackResultParameterItems(payload)];
+  const match = items.find(
+    (item) =>
+      typeof item.Key === "string" &&
+      keys.includes(item.Key) &&
+      item.Value !== undefined &&
+      item.Value !== null &&
+      item.Value !== "",
+  );
+
+  return match?.Value;
+}
+
+function readCallbackNumber(payload: Record<string, unknown>, keys: string[]) {
+  const value = readCallbackNamedValue(payload, keys);
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return undefined;
+}
+
+function inferCallbackProviderRequestId(payload: Record<string, unknown>) {
+  return (
+    (typeof payload.CheckoutRequestID === "string" ? payload.CheckoutRequestID : undefined) ??
+    (typeof payload.OriginatorConversationID === "string"
+      ? payload.OriginatorConversationID
+      : undefined) ??
+    (typeof payload.ConversationID === "string" ? payload.ConversationID : undefined) ??
+    (typeof payload.MerchantRequestID === "string" ? payload.MerchantRequestID : undefined) ??
+    inferCallbackTransactionId(payload)
+  );
+}
+
+function inferCallbackOperation(callbackName: CallbackName): MpesaOperation | null {
+  switch (callbackName) {
+    case "stk":
+      return "stkPush";
+    case "c2bConfirmation":
+    case "c2bValidation":
+      return "c2bRegister";
+    case "b2cResult":
+    case "b2cTimeout":
+      return "b2c";
+    case "b2bResult":
+    case "b2bTimeout":
+      return "b2b";
+    case "reversalResult":
+    case "reversalTimeout":
+      return "reversal";
+    case "pullTransactions":
+      return "pullTransactions";
+    default:
+      return null;
+  }
+}
+
+function inferCallbackAmount(callbackName: CallbackName, payload: Record<string, unknown>) {
+  switch (callbackName) {
+    case "stk":
+      return readCallbackNumber(payload, ["Amount"]);
+    case "c2bConfirmation":
+    case "c2bValidation":
+    case "pullTransactions":
+      return readCallbackNumber(payload, ["TransAmount", "Amount"]);
+    case "b2cResult":
+    case "b2bResult":
+    case "reversalResult":
+      return readCallbackNumber(payload, ["TransactionAmount", "Amount", "DebitAmount", "CreditAmount"]);
+    default:
+      return readCallbackNumber(payload, ["Amount"]);
+  }
+}
+
+function buildSyntheticTransactionFromCallback(
+  callbackName: CallbackName,
+  payload: Record<string, unknown>,
+  requestId: string,
+): TransactionRecord | null {
+  const operation = inferCallbackOperation(callbackName);
+  const amount = inferCallbackAmount(callbackName, payload);
+  if (!operation || amount === undefined || amount <= 0) {
+    return null;
+  }
+
+  const now = new Date().toISOString();
+  const customerPhoneValue = readCallbackNamedValue(payload, ["PhoneNumber", "MSISDN", "Msisdn"]);
+  const customerPhone = typeof customerPhoneValue === "string" ? customerPhoneValue : undefined;
+  const providerRequestId = inferCallbackProviderRequestId(payload);
+  const accountReferenceValue = readCallbackNamedValue(payload, [
+    "BillRefNumber",
+    "AccountReference",
+    "InvoiceNumber",
+  ]);
+  const accountReference = typeof accountReferenceValue === "string" ? accountReferenceValue : undefined;
+  const shortCodeValue = readCallbackNamedValue(payload, ["BusinessShortCode", "ShortCode"]);
+  const shortCode = typeof shortCodeValue === "string" ? shortCodeValue : undefined;
+
+  return {
+    id:
+      (typeof payload.CheckoutRequestID === "string" ? payload.CheckoutRequestID : undefined) ??
+      inferCallbackTransactionId(payload) ??
+      (typeof payload.ConversationID === "string" ? payload.ConversationID : undefined) ??
+      (typeof payload.OriginatorConversationID === "string" ? payload.OriginatorConversationID : undefined) ??
+      providerRequestId ??
+      requestId,
+    requestId,
+    provider: "mpesa",
+    operation,
+    applicationId: "safaricom",
+    status: statusFromCallback(callbackName, payload),
+    amount,
+    partyA:
+      operation === "b2c" || operation === "b2b" || operation === "reversal"
+        ? getGatewayConfig().shortcode
+        : customerPhone,
+    partyB:
+      operation === "b2c" || operation === "b2b" || operation === "reversal"
+        ? customerPhone
+        : shortCode ?? getGatewayConfig().shortcode,
+    accountReference,
+    transactionId: inferCallbackTransactionId(payload),
+    providerRequestId,
+    providerConversationId:
+      typeof payload.ConversationID === "string" ? payload.ConversationID : undefined,
+    providerOriginatorConversationId:
+      typeof payload.OriginatorConversationID === "string"
+        ? payload.OriginatorConversationID
+        : undefined,
+    createdAt: now,
+    updatedAt: now,
+    requestPayload: {},
+    callbackPayloads: [],
+  };
 }
 
 function minutesSince(timestamp?: string) {
@@ -776,12 +1152,13 @@ function matchesTransactionByCallbackPayload(
   transaction: TransactionRecord,
   payload: Record<string, unknown>,
 ) {
-  const transactionId = typeof payload.TransactionID === "string" ? payload.TransactionID : undefined;
+  const transactionId = inferCallbackTransactionId(payload);
   const conversationId = typeof payload.ConversationID === "string" ? payload.ConversationID : undefined;
   const originatorConversationId =
     typeof payload.OriginatorConversationID === "string" ? payload.OriginatorConversationID : undefined;
   const checkoutRequestId =
     typeof payload.CheckoutRequestID === "string" ? payload.CheckoutRequestID : undefined;
+  const providerRequestId = inferCallbackProviderRequestId(payload);
 
   return (
     (checkoutRequestId !== undefined && transaction.id === checkoutRequestId) ||
@@ -791,7 +1168,8 @@ function matchesTransactionByCallbackPayload(
       originatorConversationId !== undefined &&
       transaction.providerOriginatorConversationId === originatorConversationId
     ) ||
-    (checkoutRequestId !== undefined && transaction.providerRequestId === checkoutRequestId)
+    (checkoutRequestId !== undefined && transaction.providerRequestId === checkoutRequestId) ||
+    (providerRequestId !== undefined && transaction.providerRequestId === providerRequestId)
   );
 }
 
@@ -803,8 +1181,8 @@ async function findTransactionForCallback(payload: Record<string, unknown>) {
     return runtimeMatch;
   }
 
-  const storedTransactions = (await listStoredTransactions(500).catch(() => null)) ?? [];
-  return storedTransactions.find((transaction) => matchesTransactionByCallbackPayload(transaction, payload));
+  const databaseTransactions = (await listDatabaseTransactions(500).catch(() => null)) ?? [];
+  return databaseTransactions.find((transaction) => matchesTransactionByCallbackPayload(transaction, payload));
 }
 
 function statusFromCallback(callbackName: CallbackName, payload: Record<string, unknown>): TransactionStatus {
@@ -814,6 +1192,10 @@ function statusFromCallback(callbackName: CallbackName, payload: Record<string, 
 
   const resultCode = payload.ResultCode;
   if (resultCode === undefined || resultCode === null || resultCode === "") {
+    if (callbackName === "c2bConfirmation" || callbackName === "pullTransactions") {
+      return "succeeded";
+    }
+
     return "accepted";
   }
 
@@ -846,14 +1228,19 @@ export async function processMpesaCallback(
     payload: sanitizeForLogs(payload),
   };
 
-  await persistCallbackRecord(callbackRecord);
+  const storedCallbackId = await persistCallbackRecord(callbackRecord);
   addCallback(callbackRecord);
 
-  const transaction = await findTransactionForCallback(innerPayload);
+  const databaseTransactionMatch =
+    await findDatabaseTransactionForCallbackPayload(innerPayload).catch(() => null);
+  const transaction =
+    (await findTransactionForCallback(innerPayload)) ??
+    buildSyntheticTransactionFromCallback(callbackName, innerPayload, requestId);
+  let persistedDatabaseTransaction = databaseTransactionMatch;
   if (transaction) {
     transaction.status = statusFromCallback(callbackName, innerPayload);
     transaction.updatedAt = new Date().toISOString();
-    transaction.transactionId = transaction.transactionId ?? inferTransactionId(innerPayload);
+    transaction.transactionId = transaction.transactionId ?? inferCallbackTransactionId(innerPayload);
     transaction.providerConversationId =
       transaction.providerConversationId ??
       (typeof innerPayload.ConversationID === "string" ? innerPayload.ConversationID : undefined);
@@ -864,8 +1251,41 @@ export async function processMpesaCallback(
         : undefined);
     transaction.callbackPayloads.unshift(sanitizeForLogs(payload));
     upsertTransaction(transaction);
+    persistedDatabaseTransaction = await persistDatabaseTransactionRecord(
+      transaction,
+      {
+        requestId,
+        applicationId: transaction.applicationId,
+        merchantId: databaseTransactionMatch?.merchantId,
+        route: `/api/mpesa/callbacks/${callbackName}`,
+        method: "POST",
+        startedAt: Date.now(),
+      },
+      databaseTransactionMatch,
+    ).catch((error) => {
+      logEvent("warn", "Unable to persist callback-updated database transaction", {
+        requestId,
+        callbackName,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+      return null;
+    });
     await persistTransactionSnapshot(transaction).catch((error) => {
       logEvent("warn", "Unable to persist callback-updated transaction snapshot", {
+        requestId,
+        callbackName,
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    });
+  }
+
+  if (storedCallbackId && persistedDatabaseTransaction) {
+    await linkStoredCallbackToTransaction(
+      storedCallbackId,
+      persistedDatabaseTransaction.id,
+      persistedDatabaseTransaction.merchantId,
+    ).catch((error) => {
+      logEvent("warn", "Unable to link callback to transaction", {
         requestId,
         callbackName,
         message: error instanceof Error ? error.message : "unknown",

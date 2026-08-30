@@ -9,6 +9,7 @@ const environmentBaseUrls = {
 
 const applicationSchema = z.object({
   id: z.string().min(1),
+  merchantId: z.string().uuid().optional(),
   name: z.string().min(1),
   scopes: z.array(z.string()).default([]),
   enabled: z.boolean().default(true),
@@ -36,6 +37,7 @@ const envSchema = z.object({
   ADMIN_EMAIL: z.string().email().default("ops@zadhron.com"),
   ADMIN_PASSWORD: z.string().min(8, "ADMIN_PASSWORD must be set"),
   ADMIN_SESSION_SECRET: z.string().min(32, "ADMIN_SESSION_SECRET must be set"),
+  GATEWAY_DEFAULT_MERCHANT_ID: z.preprocess(blankToUndefined, z.string().uuid().optional()),
   MPESA_ENVIRONMENT: z.enum(["sandbox", "production"]).default("production"),
   MPESA_BASE_URL: optionalStringEnv,
   MPESA_CALLBACK_BASE_URL: optionalStringEnv,
@@ -270,6 +272,7 @@ export function getGatewayConfig(): GatewayConfig {
     adminEmail: env.ADMIN_EMAIL,
     adminPassword: env.ADMIN_PASSWORD,
     adminSessionSecret: env.ADMIN_SESSION_SECRET,
+    defaultMerchantId: env.GATEWAY_DEFAULT_MERCHANT_ID,
     mpesaEnvironment: env.MPESA_ENVIRONMENT,
     mpesaBaseUrl: baseUrl,
     callbackBaseUrl,

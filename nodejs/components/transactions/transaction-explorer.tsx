@@ -42,8 +42,8 @@ export function TransactionExplorer({ items }: Props) {
   if (!items.length) {
     return (
       <EmptyState
-        title="No transaction runtime data"
-        description="Once requests flow through this deployment, you will be able to filter by operation, status, and application, then inspect the full transaction lifecycle inline."
+        title="No database transactions"
+        description="Once transaction records are available in the database, you will be able to filter by operation, status, and application, then inspect the lifecycle inline."
       />
     );
   }

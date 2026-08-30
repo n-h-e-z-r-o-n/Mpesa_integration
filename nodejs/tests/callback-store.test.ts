@@ -11,15 +11,23 @@ describe("callback store", () => {
   });
 
   test("retries callback inserts without source_ip when the live schema does not support it", async () => {
-    const insert = vi
+    const insert = vi.fn();
+    const single = vi
       .fn()
-      .mockResolvedValueOnce({ error: missingSourceIpError })
-      .mockResolvedValueOnce({ error: null });
+      .mockResolvedValueOnce({ data: null, error: missingSourceIpError })
+      .mockResolvedValueOnce({ data: { id: "provider-event-1" }, error: null });
 
     vi.doMock("@/lib/supabase/admin", () => ({
       createSupabaseAdminClient: () => ({
         from: () => ({
-          insert,
+          insert: (...args: unknown[]) => {
+            insert(...args);
+            return {
+              select: () => ({
+                single,
+              }),
+            };
+          },
         }),
       }),
       hasSupabaseAdminAccess: () => true,
@@ -45,7 +53,7 @@ describe("callback store", () => {
           },
         },
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe("provider-event-1");
 
     expect(insert).toHaveBeenCalledTimes(2);
     expect(insert).toHaveBeenNthCalledWith(
@@ -106,8 +114,8 @@ describe("callback store", () => {
     const callbacks = await listStoredCallbacks();
 
     expect(selectCalls).toEqual([
-      "id, event_type, payload, processing_status, received_at, source_ip",
-      "id, event_type, payload, processing_status, received_at",
+      "id, event_type, merchant_id, payload, processing_status, received_at, source_ip",
+      "id, event_type, merchant_id, payload, processing_status, received_at",
     ]);
     expect(callbacks).toEqual([
       expect.objectContaining({

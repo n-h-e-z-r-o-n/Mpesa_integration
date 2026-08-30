@@ -90,6 +90,7 @@ export interface NormalizedGatewayResponse<TData = unknown> {
 
 export interface GatewayApplicationRecord {
   id: string;
+  merchantId?: string;
   name: string;
   scopes: string[];
   enabled: boolean;

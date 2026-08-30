@@ -243,6 +243,8 @@ CREATE TABLE public.transactions (
         REFERENCES public.merchant_accounts(id)
         ON DELETE RESTRICT,
 
+    application_id TEXT NOT NULL,
+
     api_key_id UUID
         REFERENCES public.api_keys(id)
         ON DELETE SET NULL,
@@ -332,6 +334,9 @@ CREATE TABLE public.transactions (
 
 CREATE INDEX transactions_merchant_created_idx
 ON public.transactions (merchant_id, created_at DESC);
+
+CREATE INDEX transactions_application_created_idx
+ON public.transactions (application_id, created_at DESC);
 
 CREATE INDEX transactions_status_idx
 ON public.transactions (status);

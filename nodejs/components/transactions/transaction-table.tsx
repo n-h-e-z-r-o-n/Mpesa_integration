@@ -11,8 +11,8 @@ export function TransactionTable({ items }: Props) {
   if (!items.length) {
     return (
       <EmptyState
-        title="No transaction runtime data"
-        description="This runtime instance has not initiated or observed transactions yet. Once the gateway starts processing requests, accepted requests and callback updates will appear here."
+        title="No database transactions"
+        description="No transaction rows are available in the database yet. Once the gateway persists records there, recent transactions will appear here."
       />
     );
   }

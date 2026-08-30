@@ -12,6 +12,7 @@ export interface GatewayConfig {
   adminEmail: string;
   adminPassword: string;
   adminSessionSecret: string;
+  defaultMerchantId?: string;
   mpesaEnvironment: "sandbox" | "production";
   mpesaBaseUrl: string;
   callbackBaseUrl: string;
@@ -66,11 +67,13 @@ export interface GatewayConfig {
 export interface GatewayRequestContext {
   requestId: string;
   applicationId: string;
+  merchantId?: string;
   route: string;
   method: string;
   startedAt: number;
   idempotencyKey?: string;
   adminUser?: string;
+  adminUserId?: string;
 }
 
 export interface ProviderHttpResult<T = Record<string, unknown>> {

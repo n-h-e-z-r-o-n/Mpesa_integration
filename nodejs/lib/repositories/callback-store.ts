@@ -6,6 +6,7 @@ import { createSupabaseAdminClient, hasSupabaseAdminAccess } from "@/lib/supabas
 type ProviderEventRow = {
   event_type: string;
   id: string;
+  merchant_id?: string | null;
   payload: Record<string, unknown>;
   processing_status: string;
   received_at: string;
@@ -36,6 +37,8 @@ function inferProviderRequestId(payload: Record<string, unknown>) {
     readString(payload.OriginatorConversationID) ??
     readString(payload.ConversationID) ??
     readString(payload.MerchantRequestID) ??
+    readString(payload.TransID) ??
+    readString(payload.MpesaReceiptNumber) ??
     readString(payload.TransactionID)
   );
 }
@@ -80,8 +83,8 @@ function buildInsertPayload(record: CallbackRecord, includeSourceIp: boolean) {
 
 function getSelectColumns(includeSourceIp: boolean) {
   return includeSourceIp
-    ? "id, event_type, payload, processing_status, received_at, source_ip"
-    : "id, event_type, payload, processing_status, received_at";
+    ? "id, event_type, merchant_id, payload, processing_status, received_at, source_ip"
+    : "id, event_type, merchant_id, payload, processing_status, received_at";
 }
 
 function isMissingSourceIpColumn(error: { message?: string } | null) {
@@ -144,23 +147,54 @@ export async function persistCallbackRecord(record: CallbackRecord) {
   const supabase = createSupabaseAdminClient();
 
   if (!supabase) {
-    return;
+    return null;
   }
 
   const includeSourceIp = providerEventsSupportsSourceIp !== false;
-  let { error } = await supabase
+  let { data, error } = await supabase
     .from("provider_events")
-    .insert(buildInsertPayload(record, includeSourceIp));
+    .insert(buildInsertPayload(record, includeSourceIp))
+    .select("id")
+    .single<{ id: string }>();
 
   if (isMissingSourceIpColumn(error)) {
     providerEventsSupportsSourceIp = false;
-    ({ error } = await supabase.from("provider_events").insert(buildInsertPayload(record, false)));
+    ({ data, error } = await supabase
+      .from("provider_events")
+      .insert(buildInsertPayload(record, false))
+      .select("id")
+      .single<{ id: string }>());
   } else if (!error && providerEventsSupportsSourceIp === null) {
     providerEventsSupportsSourceIp = includeSourceIp;
   }
 
   if (error) {
     throw new Error(`Unable to persist callback event: ${error.message}`);
+  }
+
+  return data?.id ?? null;
+}
+
+export async function linkStoredCallbackToTransaction(
+  providerEventId: string,
+  transactionId: string,
+  merchantId: string,
+) {
+  const supabase = createSupabaseAdminClient();
+  if (!supabase) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from("provider_events")
+    .update({
+      transaction_id: transactionId,
+      merchant_id: merchantId,
+    })
+    .eq("id", providerEventId);
+
+  if (error) {
+    throw new Error(`Unable to link callback to transaction: ${error.message}`);
   }
 }
 
