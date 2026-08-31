@@ -1,18 +1,18 @@
 import type { GatewayConfig } from "@/lib/mpesa/types";
-import type { MpesaOperation } from "@/types/gateway";
 import type { OperationDefinition } from "@/lib/gateway/catalog";
+import type { MpesaOperation } from "@/types/gateway";
+
+import { DocHeading } from "@/components/public/doc-heading";
+import { DocsCodeTabs, type CodeTab } from "@/components/public/docs-code-tabs";
+import {
+  DeveloperDocsShell,
+  type DocsSidebarSection,
+  type DocsTocItem,
+} from "@/components/public/developer-docs-shell";
 
 type Props = {
   config: GatewayConfig;
   operations: OperationDefinition[];
-};
-
-type OperationGroup = {
-  id: string;
-  title: string;
-  eyebrow: string;
-  description: string;
-  operations: MpesaOperation[];
 };
 
 type CallbackDoc = {
@@ -22,85 +22,91 @@ type CallbackDoc = {
   operations: MpesaOperation[];
 };
 
-const operationGroups: OperationGroup[] = [
-  {
-    id: "access",
-    title: "Access And Health",
-    eyebrow: "Control plane",
-    description: "Authentication checks, token health, and read-style request paths.",
-    operations: ["oauthToken", "stkQuery", "transactionStatus", "accountBalance"],
-  },
-  {
-    id: "collections",
-    title: "Collections",
-    eyebrow: "Customer money-in",
-    description: "Prompt customers, simulate paybill collections, and inspect collection feeds.",
-    operations: ["stkPush", "c2bRegister", "c2bSimulate", "pullTransactions", "pullTransactionsQuery", "pullTransactionsRegister"],
-  },
-  {
-    id: "payouts",
-    title: "Payouts And Treasury",
-    eyebrow: "Money-out and reversals",
-    description: "Operational disbursements, business transfers, and post-payment correction flows.",
-    operations: ["b2c", "b2b", "businessToPochi", "reversal"],
-  },
-  {
-    id: "extensions",
-    title: "Extensions",
-    eyebrow: "Adjacent provider features",
-    description: "QR, Bill Manager, mobile validation, and Ratiba passthrough integrations.",
-    operations: [
-      "dynamicQrCode",
-      "billManager",
-      "billManagerOptin",
-      "billManagerChangeOptinDetails",
-      "billManagerCreateSingleInvoice",
-      "billManagerCreateBulkInvoices",
-      "billManagerCancelSingleInvoice",
-      "billManagerCancelBulkInvoices",
-      "billManagerReconciliation",
-      "mobileNumberValidation",
-      "ratiba",
-    ],
-  },
-];
+type StatusRow = {
+  label: string;
+  description: string;
+};
+
+type ErrorRow = {
+  code: string;
+  description: string;
+  status: number;
+};
+
+type EndpointDoc = {
+  authentication: string[];
+  description: string;
+  errors: ErrorRow[];
+  id: string;
+  immediateResponse: CodeTab[];
+  method: "GET" | "POST";
+  notes?: string[];
+  parameters: Array<{
+    defaultValue?: string;
+    description: string;
+    name: string;
+    required: boolean;
+    type: string;
+  }>;
+  requestExamples: CodeTab[];
+  route: string;
+  statusHeading?: string;
+  statuses: StatusRow[];
+  title: string;
+  webhook?: {
+    callbackLabel?: string;
+    callbackUrl?: string;
+    description: string;
+    examples: CodeTab[];
+  };
+};
 
 const callbackDocs: CallbackDoc[] = [
   { key: "stk", label: "STK callback", purpose: "Finalizes STK checkout outcome payloads.", operations: ["stkPush"] },
   {
     key: "c2bConfirmation",
     label: "C2B confirmation",
-    purpose: "Receives paybill/till confirmation and can reconcile missing STK terminal events.",
+    purpose: "Receives the final confirmation payload for incoming C2B transactions.",
     operations: ["c2bRegister", "c2bSimulate", "stkPush"],
   },
   {
     key: "c2bValidation",
     label: "C2B validation",
-    purpose: "Receives validation requests before C2B confirmation.",
+    purpose: "Receives pre-confirmation validation requests for registered C2B URLs.",
     operations: ["c2bRegister"],
   },
-  { key: "b2cResult", label: "B2C result", purpose: "Receives asynchronous B2C completion result.", operations: ["b2c", "businessToPochi"] },
-  { key: "b2cTimeout", label: "B2C timeout", purpose: "Receives B2C queue timeout notification.", operations: ["b2c", "businessToPochi"] },
-  { key: "b2bResult", label: "B2B result", purpose: "Receives asynchronous B2B completion result.", operations: ["b2b"] },
-  { key: "b2bTimeout", label: "B2B timeout", purpose: "Receives B2B queue timeout notification.", operations: ["b2b"] },
+  {
+    key: "b2cResult",
+    label: "B2C result",
+    purpose: "Receives the terminal payout result for B2C and Business to Pochi requests.",
+    operations: ["b2c", "businessToPochi"],
+  },
+  {
+    key: "b2cTimeout",
+    label: "B2C timeout",
+    purpose: "Receives queue timeout notices for B2C and Business to Pochi requests.",
+    operations: ["b2c", "businessToPochi"],
+  },
+  { key: "b2bResult", label: "B2B result", purpose: "Receives the terminal B2B result payload.", operations: ["b2b"] },
+  { key: "b2bTimeout", label: "B2B timeout", purpose: "Receives B2B queue timeout notices.", operations: ["b2b"] },
   {
     key: "transactionStatusResult",
     label: "Transaction status result",
-    purpose: "Returns the asynchronous answer for transaction-status lookups.",
+    purpose: "Returns the asynchronous answer for provider-side transaction-status queries.",
     operations: ["transactionStatus"],
   },
   {
     key: "transactionStatusTimeout",
     label: "Transaction status timeout",
-    purpose: "Returns timeout notices for transaction-status lookups.",
+    purpose: "Returns timeout notices for provider-side transaction-status queries.",
     operations: ["transactionStatus"],
   },
-  { key: "reversalResult", label: "Reversal result", purpose: "Receives final reversal outcome.", operations: ["reversal"] },
-  { key: "reversalTimeout", label: "Reversal timeout", purpose: "Receives reversal queue timeout notice.", operations: ["reversal"] },
+  { key: "reversalResult", label: "Reversal result", purpose: "Receives the final reversal outcome.", operations: ["reversal"] },
+  { key: "reversalTimeout", label: "Reversal timeout", purpose: "Receives reversal queue timeout notices.", operations: ["reversal"] },
   {
     key: "accountBalanceResult",
     label: "Account balance result",
-    purpose: "Returns the provider's official balance snapshot for the configured shortcode.",
+    purpose: "Returns the official provider balance snapshot for the configured shortcode.",
     operations: ["accountBalance"],
   },
   {
@@ -109,17 +115,17 @@ const callbackDocs: CallbackDoc[] = [
     purpose: "Returns timeout notices for account-balance queries.",
     operations: ["accountBalance"],
   },
-  { key: "ratiba", label: "Ratiba callback", purpose: "Receives Ratiba-specific asynchronous payloads.", operations: ["ratiba"] },
+  { key: "ratiba", label: "Ratiba callback", purpose: "Receives Ratiba downstream payloads.", operations: ["ratiba"] },
   {
     key: "pullTransactions",
     label: "Pull Transactions callback",
-    purpose: "Receives bulk or registration responses for pull-transaction workflows.",
+    purpose: "Receives pull-transactions registration or query responses.",
     operations: ["pullTransactions", "pullTransactionsQuery", "pullTransactionsRegister"],
   },
   {
     key: "billManager",
     label: "Bill Manager callback",
-    purpose: "Receives Bill Manager downstream payloads and acknowledgements.",
+    purpose: "Receives downstream Bill Manager acknowledgements and events.",
     operations: [
       "billManager",
       "billManagerOptin",
@@ -133,109 +139,76 @@ const callbackDocs: CallbackDoc[] = [
   },
 ];
 
-const operationNotes: Partial<Record<MpesaOperation, string[]>> = {
-  oauthToken: [
-    "No application JSON body is required.",
-    "Use this route to verify OAuth reachability and cache health before live operations.",
-  ],
+const endpointNotes: Partial<Record<MpesaOperation, string[]>> = {
   stkPush: [
-    "The initial HTTP response is usually accepted for processing and the terminal result arrives later by callback.",
-    "The gateway sanitizes `accountReference` and `transactionDesc` before sending them upstream.",
+    "The initial HTTP response only means Zadhron and Safaricom accepted the request for processing.",
+    "The gateway sanitizes accountReference to 12 alphanumeric characters and transactionDesc to 13 alphanumeric characters before forwarding the request.",
   ],
   stkQuery: [
-    "Use the earlier `CheckoutRequestID` from an STK push response.",
-    "This is the fastest manual recovery path when a callback is delayed or missing.",
-  ],
-  c2bRegister: [
-    "This registers the confirmation and validation callback URLs currently configured in the gateway.",
-    "Safaricom may reject callback URLs that violate Daraja naming restrictions.",
-  ],
-  c2bSimulate: [
-    "Sandbox-only in practical use.",
-    "Useful for validating downstream callback handling without a handset prompt.",
+    "This route queries Safaricom directly using a previous CheckoutRequestID.",
+    "Use it when the transaction is still pending or when the handset callback has not arrived yet.",
   ],
   b2c: [
-    "This is an asynchronous treasury operation. The initial response confirms acceptance, not payout completion.",
-    "Use a stable `Idempotency-Key` when retrying after network uncertainty.",
+    "Provide an Idempotency-Key whenever you retry after a timeout or network uncertainty.",
+    "The terminal result arrives through the configured B2C callback URLs, not in the initial response.",
   ],
   b2b: [
-    "The gateway submits the configured shortcode as `PartyA` and the provided receiver shortcode as `PartyB`.",
-    "The final result still arrives through callback routes.",
+    "The gateway supplies the configured shortcode as PartyA and the request receiverShortcode as PartyB.",
+    "The final result still arrives asynchronously through result or timeout callbacks.",
   ],
   businessToPochi: [
     "This shares the B2C-style callback rail in the current implementation.",
-    "Use it when Safaricom has enabled the B2Pochi product for your shortcode.",
-  ],
-  dynamicQrCode: [
-    "The gateway does not reshape the provider payload beyond validation and routing.",
-    "Use `pathOverride` only when Safaricom has provisioned a non-default route.",
-  ],
-  billManager: [
-    "This is a generic passthrough for approved Bill Manager actions.",
-    "Downstream payload shape depends on the Bill Manager action you are enabled for.",
-  ],
-  billManagerOptin: [
-    "Environment defaults are merged in before upstream submission.",
-    "The configured Bill Manager callback is used unless explicitly overridden.",
-  ],
-  billManagerChangeOptinDetails: [
-    "This shares the same payload contract as Bill Manager opt-in.",
-    "Use it to refresh Bill Manager registration metadata without changing routes elsewhere.",
-  ],
-  billManagerCreateSingleInvoice: [
-    "The payload is forwarded as provided after non-empty validation.",
-  ],
-  billManagerCreateBulkInvoices: [
-    "At least one invoice object is required.",
-  ],
-  billManagerCancelSingleInvoice: [
-    "Cancellation is keyed by `externalReference` in the current gateway surface.",
-  ],
-  billManagerCancelBulkInvoices: [
-    "Cancellation is keyed by `externalReference` in the current gateway surface.",
-  ],
-  billManagerReconciliation: [
-    "This route expects a raw reconciliation payload object.",
-  ],
-  pullTransactions: [
-    "This is the generic pass-through entry point for pull-transactions actions.",
-    "Use `pathOverride` when you need the registration endpoint through the same route shape.",
-  ],
-  pullTransactionsQuery: [
-    "Date values must use `YYYY-MM-DD HH:MM:SS`.",
-    "The current provider route is limited to the recent transaction window described by Daraja.",
-  ],
-  pullTransactionsRegister: [
-    "Environment defaults fill in the shortcode, nominated number, request type, and callback URL.",
-  ],
-  mobileNumberValidation: [
-    "This is a provider-specific pass-through payload.",
+    "Use it only when the B2Pochi product is provisioned for your shortcode.",
   ],
   transactionStatus: [
-    "This is an asynchronous query. Completion is delivered through the result or timeout callbacks.",
+    "This is an asynchronous provider query and is distinct from Zadhron's own stored transaction lookup endpoint.",
+    "Use it when you need Safaricom's terminal view of a transaction, not just the latest Zadhron record.",
   ],
   reversal: [
-    "A successful initial response still requires the reversal callback for terminal confirmation.",
+    "The initial response only confirms acceptance into Safaricom's reversal pipeline.",
+    "Treat the reversalResult or reversalTimeout callback as the terminal signal.",
   ],
   accountBalance: [
-    "This route requests the provider's official balance snapshot.",
-    "The admin dashboard uses the official callback snapshot as a baseline and layers later transaction deltas on top.",
-  ],
-  ratiba: [
-    "If the payload omits `CallBackURL`, the gateway injects the configured Ratiba callback.",
+    "This route requests the official balance snapshot for the configured shortcode.",
+    "The dashboard layers later transaction deltas on top of the latest balance callback when available.",
   ],
 };
 
-function toAnchor(id: string) {
-  return id.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`);
+const defaultErrors: ErrorRow[] = [
+  { status: 401, code: "authentication_error", description: "Missing, unknown, disabled, or invalid application credentials." },
+  { status: 403, code: "authorization_error", description: "The application is authenticated but lacks the required operation scope." },
+  { status: 422, code: "validation_error", description: "The request body failed schema validation or required gateway configuration is missing." },
+  { status: 502, code: "mpesa_request_failed", description: "Safaricom rejected the upstream request or returned an operational failure." },
+];
+
+function getOperation(
+  operationMap: Map<MpesaOperation, OperationDefinition>,
+  operationId: MpesaOperation,
+) {
+  const operation = operationMap.get(operationId);
+  if (!operation) {
+    throw new Error(`Missing operation definition for ${operationId}`);
+  }
+
+  return operation;
+}
+
+function relatedCallbacks(operationId: MpesaOperation, config: GatewayConfig) {
+  return callbackDocs
+    .filter((item) => item.operations.includes(operationId))
+    .map((item) => ({
+      ...item,
+      url: config.callbackUrls[item.key],
+      legacyUrl: config.legacyCallbackUrls[item.key],
+    }));
 }
 
 function isJsonField(operationId: MpesaOperation, fieldName: string) {
   return (
     fieldName === "payload" ||
     fieldName === "invoices" ||
-    (operationId === "billManagerCreateSingleInvoice" && fieldName !== "") ||
-    (operationId === "billManagerReconciliation" && fieldName !== "")
+    operationId === "billManagerCreateSingleInvoice" ||
+    operationId === "billManagerReconciliation"
   );
 }
 
@@ -267,14 +240,14 @@ function exampleValue(operationId: MpesaOperation, fieldName: string) {
       remarks: "Agent payout",
       commandId: "BusinessPayment",
       occasion: "August settlement",
-      originatorConversationId: "ops-payout-2026-08-30-01",
+      originatorConversationId: "ops-payout-2026-08-31-01",
     },
     b2b: {
       receiverShortcode: "600999",
       amount: 5000,
       remarks: "Settlement transfer",
       commandId: "BusinessPayBill",
-      accountReference: "SETTLE-1001",
+      accountReference: "SETTLE1001",
       senderIdentifierType: "4",
       receiverIdentifierType: "4",
     },
@@ -284,95 +257,7 @@ function exampleValue(operationId: MpesaOperation, fieldName: string) {
       remarks: "Merchant cashout",
       commandId: "BusinessPayToPochi",
       occasion: "Field refund",
-      originatorConversationId: "pochi-2026-08-30-01",
-    },
-    dynamicQrCode: {
-      payload: {
-        MerchantName: "Zadhron",
-        RefNo: "INV1001",
-        Amount: 1500,
-        TrxCode: "BG",
-        CPI: "174379",
-        Size: "300",
-      },
-      pathOverride: "/mpesa/qrcode/v1/generate",
-    },
-    billManager: {
-      payload: {
-        externalReference: "INV1001",
-        action: "acknowledge",
-      },
-      pathOverride: "/v1/billmanager-invoice/acknowledgement",
-    },
-    billManagerOptin: {
-      shortcode: "174379",
-      email: "billing@zadhron.com",
-      officialContact: "254722000000",
-      sendReminders: 1,
-      logo: "https://payments.zadhron.com/logo.png",
-      callbackurl: "https://payments.zadhron.com/callbacks/payments/bill-manager",
-    },
-    billManagerChangeOptinDetails: {
-      shortcode: "174379",
-      email: "billing@zadhron.com",
-      officialContact: "254722000000",
-      sendReminders: 1,
-      logo: "https://payments.zadhron.com/logo.png",
-      callbackurl: "https://payments.zadhron.com/callbacks/payments/bill-manager",
-    },
-    billManagerCreateSingleInvoice: {
-      payload: {
-        externalReference: "INV1001",
-        invoiceName: "August utilities",
-        amount: 1500,
-        dueDate: "2026-09-05",
-      },
-    },
-    billManagerCreateBulkInvoices: {
-      invoices: [
-        { externalReference: "INV1001", amount: 1500, invoiceName: "August utilities" },
-        { externalReference: "INV1002", amount: 2200, invoiceName: "August airtime" },
-      ],
-    },
-    billManagerCancelSingleInvoice: {
-      externalReference: "INV1001",
-    },
-    billManagerCancelBulkInvoices: {
-      externalReference: "BULK-1001",
-    },
-    billManagerReconciliation: {
-      payload: {
-        startDate: "2026-08-01",
-        endDate: "2026-08-30",
-      },
-    },
-    pullTransactions: {
-      payload: {
-        ShortCode: "174379",
-        StartDate: "2026-08-30 00:00:00",
-        EndDate: "2026-08-30 23:59:59",
-        OffSetValue: "0",
-      },
-      pathOverride: "/pulltransactions/v1/query",
-    },
-    pullTransactionsQuery: {
-      ShortCode: "174379",
-      StartDate: "2026-08-30 00:00:00",
-      EndDate: "2026-08-30 23:59:59",
-      OffSetValue: "0",
-    },
-    pullTransactionsRegister: {
-      ShortCode: "174379",
-      RequestType: "Pull",
-      NominatedNumber: "254733000000",
-      CallBackURL: "https://payments.zadhron.com/callbacks/payments/pull-transactions",
-    },
-    mobileNumberValidation: {
-      payload: {
-        phoneNumber: "254712345678",
-        serviceCode: "customer-onboarding",
-      },
-      pathOverride: "/mobile-number-validation/v1/validate",
+      originatorConversationId: "pochi-2026-08-31-01",
     },
     transactionStatus: {
       transactionId: "OEI2AK4Q16",
@@ -395,13 +280,6 @@ function exampleValue(operationId: MpesaOperation, fieldName: string) {
       identifierType: "4",
       commandId: "AccountBalance",
     },
-    ratiba: {
-      payload: {
-        planId: "RATIBA-1001",
-        amount: 750,
-        frequency: "monthly",
-      },
-    },
   };
 
   return samples[operationId]?.[fieldName];
@@ -410,15 +288,6 @@ function exampleValue(operationId: MpesaOperation, fieldName: string) {
 function buildExampleRequest(operation: OperationDefinition) {
   if (operation.method === "GET") {
     return null;
-  }
-
-  const explicitPayload =
-    operation.id === "billManagerCreateSingleInvoice" || operation.id === "billManagerReconciliation"
-      ? exampleValue(operation.id, "payload")
-      : null;
-
-  if (explicitPayload && typeof explicitPayload === "object" && !Array.isArray(explicitPayload)) {
-    return explicitPayload;
   }
 
   const body: Record<string, unknown> = {};
@@ -465,27 +334,13 @@ function buildExampleResponse(operation: OperationDefinition) {
     success: true,
     provider: "mpesa",
     operation: operation.id,
-    requestId: "req_01hzk-demo",
-    timestamp: "2026-08-30T16:45:00.000Z",
+    requestId: "req_01j6-demo",
+    timestamp: "2026-08-31T11:45:00.000Z",
     status: inferStatus(operation.id),
     httpStatus: operation.id === "stkPush" ? 202 : 200,
   };
 
   switch (operation.id) {
-    case "oauthToken":
-      return {
-        ...common,
-        data: {
-          tokenAvailable: true,
-          cache: {
-            cached: true,
-          },
-        },
-        meta: {
-          applicationId: "app_live",
-          latencyMs: 84,
-        },
-      };
     case "stkPush":
       return {
         ...common,
@@ -503,7 +358,7 @@ function buildExampleResponse(operation: OperationDefinition) {
         },
         meta: {
           applicationId: "app_live",
-          idempotencyKey: "stk-20260830-1001",
+          idempotencyKey: "stk-20260831-1001",
           latencyMs: 321,
         },
       };
@@ -518,19 +373,19 @@ function buildExampleResponse(operation: OperationDefinition) {
         data: {
           ResponseCode: "0",
           ResponseDescription: "Accept the service request successfully.",
-          ConversationID: "AG_20260830_123456789abc",
+          ConversationID: "AG_20260831_123456789abc",
           OriginatorConversationID: "ops-reference-1001",
         },
         upstream: {
           httpStatus: 200,
-          conversationId: "AG_20260830_123456789abc",
+          conversationId: "AG_20260831_123456789abc",
           originatorConversationId: "ops-reference-1001",
           responseCode: "0",
           responseDescription: "Accept the service request successfully.",
         },
         meta: {
           applicationId: "app_live",
-          ...(operation.moneyMoving ? { idempotencyKey: "moneyflow-20260830-1001" } : {}),
+          ...(operation.moneyMoving ? { idempotencyKey: "moneyflow-20260831-1001" } : {}),
           latencyMs: 290,
         },
       };
@@ -548,7 +403,6 @@ function buildExampleResponse(operation: OperationDefinition) {
         },
         meta: {
           applicationId: "app_live",
-          ...(operation.moneyMoving ? { idempotencyKey: "moneyflow-20260830-1001" } : {}),
           latencyMs: 190,
         },
       };
@@ -567,7 +421,7 @@ function buildCurlExample(operation: OperationDefinition, baseUrl: string) {
   }
 
   if (operation.moneyMoving) {
-    lines.push('  -H "Idempotency-Key: moneyflow-20260830-1001"');
+    lines.push('  -H "Idempotency-Key: moneyflow-20260831-1001"');
   }
 
   const request = buildExampleRequest(operation);
@@ -578,412 +432,1513 @@ function buildCurlExample(operation: OperationDefinition, baseUrl: string) {
   return lines.join(" \\\n");
 }
 
-function callbacksForOperation(operationId: MpesaOperation) {
-  return callbackDocs.filter((item) => item.operations.includes(operationId));
+function buildNodeExample(operation: OperationDefinition, baseUrl: string) {
+  const request = buildExampleRequest(operation);
+  const lines = [
+    `const response = await fetch("${baseUrl}${operation.route}", {`,
+    `  method: "${operation.method}",`,
+    "  headers: {",
+    '    "Content-Type": "application/json",',
+    '    "x-zadhron-app-id": "app_live",',
+    '    "x-zadhron-app-secret": "replace-with-secret",',
+    ...(operation.moneyMoving ? ['    "Idempotency-Key": "moneyflow-20260831-1001",'] : []),
+    "  },",
+    ...(request ? [`  body: JSON.stringify(${JSON.stringify(request, null, 2)}),`] : []),
+    "});",
+    "",
+    "const data = await response.json();",
+    "console.log(response.status, data);",
+  ];
+
+  return lines.join("\n");
 }
 
-function methodTone(method: OperationDefinition["method"]) {
-  return method === "GET" ? "bg-emerald-100 text-emerald-800" : "bg-sky-100 text-sky-800";
+function buildStoredStatusCurlExample(baseUrl: string) {
+  return [
+    `curl "${baseUrl}/api/mpesa/transactions/status?checkoutRequestId=ws_CO_123456789"`,
+    '  -H "x-zadhron-app-id: app_live"',
+    '  -H "x-zadhron-app-secret: replace-with-secret"',
+  ].join(" \\\n");
 }
 
-function moneyFlowLabel(operation: OperationDefinition) {
-  return operation.moneyMoving ? "Money moving" : "Control or query";
+function buildStoredStatusNodeExample(baseUrl: string) {
+  return [
+    `const url = new URL("${baseUrl}/api/mpesa/transactions/status");`,
+    'url.searchParams.set("checkoutRequestId", "ws_CO_123456789");',
+    "",
+    "const response = await fetch(url, {",
+    '  headers: {',
+    '    "x-zadhron-app-id": "app_live",',
+    '    "x-zadhron-app-secret": "replace-with-secret",',
+    "  },",
+    "});",
+    "",
+    "const data = await response.json();",
+    "console.log(data.transaction);",
+  ].join("\n");
+}
+
+function buildStoredStatusResponseExample() {
+  return JSON.stringify(
+    {
+      success: true,
+      transaction: {
+        id: "req_01j6-demo",
+        requestId: "req_01j6-demo",
+        checkoutRequestId: "ws_CO_123456789",
+        transactionId: "UHT0U45KSB",
+        status: "succeeded",
+        amount: 1500,
+        accountReference: "INV1001",
+        createdAt: "2026-08-31T11:45:00.000Z",
+        updatedAt: "2026-08-31T11:47:12.000Z",
+      },
+    },
+    null,
+    2,
+  );
+}
+
+function buildErrorExample(operation: MpesaOperation) {
+  return JSON.stringify(
+    {
+      success: false,
+      provider: "mpesa",
+      operation,
+      requestId: "req_01j6-failed",
+      timestamp: "2026-08-31T11:46:00.000Z",
+      status: "failed",
+      httpStatus: 422,
+      error: {
+        code: "validation_error",
+        message: "Request validation failed",
+        details: {
+          fields: [
+            {
+              path: "phoneNumber",
+              message: "Required",
+            },
+          ],
+        },
+      },
+      meta: {
+        applicationId: "app_live",
+        latencyMs: 8,
+      },
+    },
+    null,
+    2,
+  );
+}
+
+function buildStkWebhookExample() {
+  return JSON.stringify(
+    {
+      Body: {
+        stkCallback: {
+          MerchantRequestID: "29115-34620561-1",
+          CheckoutRequestID: "ws_CO_123456789",
+          ResultCode: 0,
+          ResultDesc: "The service request is processed successfully.",
+          CallbackMetadata: {
+            Item: [
+              { Name: "Amount", Value: 1500 },
+              { Name: "MpesaReceiptNumber", Value: "UHT0U45KSB" },
+              { Name: "TransactionDate", Value: 20260831114712 },
+              { Name: "PhoneNumber", Value: 254712345678 },
+            ],
+          },
+        },
+      },
+    },
+    null,
+    2,
+  );
+}
+
+function buildTreasuryWebhookExample(kind: "b2c" | "b2b" | "transactionStatus" | "reversal" | "accountBalance") {
+  const result =
+    kind === "accountBalance"
+      ? {
+          ResultCode: 0,
+          ResultDesc: "The service request is processed successfully.",
+          OriginatorConversationID: "ops-reference-1001",
+          ConversationID: "AG_20260831_123456789abc",
+          ResultParameters: {
+            ResultParameter: [
+              { Key: "AccountBalance", Value: "Working Account|KES|32500.00|32500.00" },
+            ],
+          },
+        }
+      : kind === "transactionStatus"
+        ? {
+            ResultCode: 0,
+            ResultDesc: "The service request is processed successfully.",
+            OriginatorConversationID: "ops-reference-1001",
+            ConversationID: "AG_20260831_123456789abc",
+            TransactionID: "OEI2AK4Q16",
+            ResultParameters: {
+              ResultParameter: [{ Key: "TransactionStatus", Value: "Completed" }],
+            },
+          }
+        : kind === "reversal"
+          ? {
+              ResultCode: 0,
+              ResultDesc: "The service request is processed successfully.",
+              OriginatorConversationID: "ops-reference-1001",
+              ConversationID: "AG_20260831_123456789abc",
+              TransactionID: "OEI2AK4Q16",
+              ResultParameters: {
+                ResultParameter: [{ Key: "TransactionReceipt", Value: "UHT0U45KSB" }],
+              },
+            }
+          : {
+              ResultCode: 0,
+              ResultDesc: "The service request is processed successfully.",
+              OriginatorConversationID: "ops-reference-1001",
+              ConversationID: "AG_20260831_123456789abc",
+              TransactionID: "QDG7X9ZC22",
+              ResultParameters: {
+                ResultParameter: [{ Key: "TransactionReceipt", Value: "QDG7X9ZC22" }],
+              },
+            };
+
+  return JSON.stringify({ Result: result }, null, 2);
+}
+
+function buildC2bConfirmationExample() {
+  return JSON.stringify(
+    {
+      TransID: "UHT0U45KSB",
+      TransAmount: "1500.00",
+      BillRefNumber: "INV1001",
+      MSISDN: "254712345678",
+      BusinessShortCode: "174379",
+    },
+    null,
+    2,
+  );
+}
+
+function renderParameterTable(parameters: EndpointDoc["parameters"]) {
+  return (
+    <div className="overflow-hidden rounded-[1.4rem] border border-slate-200">
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-slate-50 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+            <tr>
+              <th className="px-4 py-3">Field</th>
+              <th className="px-4 py-3">Type</th>
+              <th className="px-4 py-3">Required</th>
+              <th className="px-4 py-3">Details</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white">
+            {parameters.map((parameter) => (
+              <tr key={parameter.name} className="border-t border-slate-200 align-top">
+                <td className="mono px-4 py-3 text-slate-950">{parameter.name}</td>
+                <td className="px-4 py-3 text-slate-600">{parameter.type}</td>
+                <td className="px-4 py-3 text-slate-600">{parameter.required ? "Yes" : "Optional"}</td>
+                <td className="px-4 py-3 text-slate-600">
+                  {parameter.description}
+                  {parameter.defaultValue ? (
+                    <span className="block text-slate-500">Default: {parameter.defaultValue}</span>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function EndpointArticle({ doc }: { doc: EndpointDoc }) {
+  return (
+    <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+      <DocHeading as="h2" id={doc.id} className="text-3xl font-semibold tracking-[-0.05em]">
+        {doc.title}
+      </DocHeading>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
+          doc.method === "POST" ? "bg-sky-100 text-sky-900" : "bg-emerald-100 text-emerald-900"
+        }`}>
+          {doc.method}
+        </span>
+        <code className="mono rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-700">
+          {doc.route}
+        </code>
+      </div>
+      <p className="mt-5 max-w-3xl text-base leading-8 text-slate-600">{doc.description}</p>
+
+      <div className="mt-8 grid gap-6 2xl:grid-cols-[0.92fr_1.08fr]">
+        <div className="space-y-6">
+          <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Authentication</div>
+            <ul className="mt-4 space-y-3 text-sm leading-7 text-slate-600">
+              {doc.authentication.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <div className="mb-3 text-[11px] uppercase tracking-[0.16em] text-slate-500">Request parameters</div>
+            {renderParameterTable(doc.parameters)}
+          </div>
+
+          {doc.notes?.length ? (
+            <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Implementation notes</div>
+              <ul className="mt-4 space-y-3 text-sm leading-7 text-slate-600">
+                {doc.notes.map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+              {doc.statusHeading ?? "Possible statuses"}
+            </div>
+            <div className="mt-4 space-y-3">
+              {doc.statuses.map((status) => (
+                <div key={status.label} className="rounded-[1.2rem] border border-slate-200 bg-white p-4">
+                  <div className="mono text-sm text-slate-950">{status.label}</div>
+                  <p className="mt-2 text-sm leading-7 text-slate-600">{status.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Error responses</div>
+            <div className="mt-4 space-y-3">
+              {doc.errors.map((error) => (
+                <div key={`${error.status}-${error.code}`} className="rounded-[1.2rem] border border-slate-200 bg-white p-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="mono text-sm text-slate-950">{error.status}</span>
+                    <span className="mono rounded-full border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600">
+                      {error.code}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm leading-7 text-slate-600">{error.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <DocsCodeTabs
+            title="Request example"
+            description="Use cURL or Node.js against the public Zadhron route. For money-moving calls, send a stable Idempotency-Key."
+            tabs={doc.requestExamples}
+          />
+          <DocsCodeTabs
+            title="Immediate response"
+            description="This is the HTTP response returned by Zadhron as soon as the gateway has processed the request."
+            tabs={doc.immediateResponse}
+          />
+          {doc.webhook ? (
+            <DocsCodeTabs
+              title="Asynchronous callback example"
+              description={`${doc.webhook.description}${doc.webhook.callbackUrl ? ` Callback URL: ${doc.webhook.callbackUrl}` : ""}`}
+              tabs={doc.webhook.examples}
+            />
+          ) : null}
+          <DocsCodeTabs
+            title="Normalized error example"
+            description="Validation, authentication, authorization, and provider errors use the same envelope shape."
+            tabs={[
+              {
+                label: "JSON",
+                language: "json",
+                tone: "response",
+                code: buildErrorExample("stkPush"),
+              },
+            ]}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function createEndpointDocs(
+  config: GatewayConfig,
+  operationMap: Map<MpesaOperation, OperationDefinition>,
+): EndpointDoc[] {
+  const stkPush = getOperation(operationMap, "stkPush");
+  const stkQuery = getOperation(operationMap, "stkQuery");
+  const b2c = getOperation(operationMap, "b2c");
+  const b2b = getOperation(operationMap, "b2b");
+  const businessToPochi = getOperation(operationMap, "businessToPochi");
+  const transactionStatus = getOperation(operationMap, "transactionStatus");
+  const reversal = getOperation(operationMap, "reversal");
+  const accountBalance = getOperation(operationMap, "accountBalance");
+
+  return [
+    {
+      id: "stk-push",
+      title: "STK Push",
+      method: stkPush.method,
+      route: stkPush.route,
+      description:
+        "Initiate a handset prompt for a customer payment. Zadhron normalizes the request and response, then waits for the terminal outcome to arrive through the STK callback rail.",
+      authentication: [
+        "Requires x-zadhron-app-id and x-zadhron-app-secret.",
+        "The application must be allowed to call the stkPush operation.",
+        "Send Idempotency-Key on retryable collection requests so duplicate prompts do not fan out after transport uncertainty.",
+      ],
+      parameters: stkPush.fields.map((field) => ({
+        name: field.name,
+        type: field.type,
+        required: field.required,
+        description: field.description,
+        defaultValue: field.name === "transactionType" ? "CustomerPayBillOnline" : undefined,
+      })),
+      requestExamples: [
+        { label: "cURL", language: "bash", tone: "request", code: buildCurlExample(stkPush, config.callbackBaseUrl) },
+        { label: "Node.js", language: "javascript", tone: "request", code: buildNodeExample(stkPush, config.callbackBaseUrl) },
+      ],
+      immediateResponse: [
+        { label: "JSON", language: "json", tone: "response", code: JSON.stringify(buildExampleResponse(stkPush), null, 2) },
+      ],
+      webhook: {
+        description:
+          "The final STK outcome arrives asynchronously. The callback payload may include nested CallbackMetadata items, including the receipt number and phone number.",
+        callbackLabel: "STK callback",
+        callbackUrl: config.callbackUrls.stk,
+        examples: [{ label: "Callback payload", language: "json", tone: "webhook", code: buildStkWebhookExample() }],
+      },
+      statuses: [
+        { label: "pending", description: "The request was accepted by Safaricom and the handset prompt is in flight." },
+        { label: "succeeded", description: "The callback or a later STK query resolved the payment successfully." },
+        { label: "cancelled", description: "The handset flow was cancelled, for example through ResultCode 1032." },
+        { label: "failed", description: "The request was rejected upstream or the callback resolved to a non-success terminal state." },
+      ],
+      errors: [...defaultErrors, { status: 409, code: "conflict_error", description: "The supplied Idempotency-Key is already in use for a different payload or is still processing." }],
+      notes: endpointNotes.stkPush,
+    },
+    {
+      id: "stk-query",
+      title: "STK Push Status / Query",
+      method: stkQuery.method,
+      route: stkQuery.route,
+      description:
+        "Query an existing STK request by CheckoutRequestID. This is the fastest recovery path when the initial request is still pending and the handset callback has not landed yet.",
+      authentication: [
+        "Requires x-zadhron-app-id and x-zadhron-app-secret.",
+        "The application must be allowed to call the stkQuery operation.",
+      ],
+      parameters: stkQuery.fields.map((field) => ({
+        name: field.name,
+        type: field.type,
+        required: field.required,
+        description: field.description,
+      })),
+      requestExamples: [
+        { label: "cURL", language: "bash", tone: "request", code: buildCurlExample(stkQuery, config.callbackBaseUrl) },
+        { label: "Node.js", language: "javascript", tone: "request", code: buildNodeExample(stkQuery, config.callbackBaseUrl) },
+      ],
+      immediateResponse: [
+        {
+          label: "JSON",
+          language: "json",
+          tone: "response",
+          code: JSON.stringify(
+            {
+              ...buildExampleResponse(stkQuery),
+              data: {
+                ResponseCode: "0",
+                ResultCode: "0",
+                ResultDesc: "The service request is processed successfully.",
+                CheckoutRequestID: "ws_CO_123456789",
+                MpesaReceiptNumber: "UHT0U45KSB",
+              },
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+      statuses: [
+        { label: "succeeded", description: "Safaricom returned a successful terminal status for the CheckoutRequestID." },
+        { label: "cancelled", description: "The request resolved to a cancelled handset flow." },
+        { label: "failed", description: "Safaricom returned a non-success terminal outcome or the query failed." },
+      ],
+      errors: defaultErrors,
+      notes: endpointNotes.stkQuery,
+    },
+    {
+      id: "b2c",
+      title: "B2C",
+      method: b2c.method,
+      route: b2c.route,
+      description:
+        "Send funds from the configured organization shortcode to a customer wallet. The initial API response is only an acceptance signal; the terminal result is asynchronous.",
+      authentication: [
+        "Requires x-zadhron-app-id and x-zadhron-app-secret.",
+        "The application must be allowed to call the b2c operation.",
+        "Send Idempotency-Key for retry safety on payout requests.",
+      ],
+      parameters: b2c.fields.map((field) => ({
+        name: field.name,
+        type: field.type,
+        required: field.required,
+        description: field.description,
+        defaultValue:
+          field.name === "commandId"
+            ? "BusinessPayment"
+            : field.name === "occasion"
+              ? '""'
+              : undefined,
+      })),
+      requestExamples: [
+        { label: "cURL", language: "bash", tone: "request", code: buildCurlExample(b2c, config.callbackBaseUrl) },
+        { label: "Node.js", language: "javascript", tone: "request", code: buildNodeExample(b2c, config.callbackBaseUrl) },
+      ],
+      immediateResponse: [
+        { label: "JSON", language: "json", tone: "response", code: JSON.stringify(buildExampleResponse(b2c), null, 2) },
+      ],
+      webhook: {
+        description:
+          "B2C completion is delivered asynchronously through the result and timeout callback pair.",
+        callbackUrl: `${config.callbackUrls.b2cResult} and ${config.callbackUrls.b2cTimeout}`,
+        examples: [{ label: "Result payload", language: "json", tone: "webhook", code: buildTreasuryWebhookExample("b2c") }],
+      },
+      statuses: [
+        { label: "accepted", description: "Safaricom accepted the request into the payout queue." },
+        { label: "succeeded", description: "The result callback resolved the payout successfully." },
+        { label: "timeout", description: "The timeout callback reported queue expiry before completion." },
+        { label: "failed", description: "The result callback or upstream request indicated failure." },
+      ],
+      errors: [...defaultErrors, { status: 409, code: "conflict_error", description: "Idempotency conflict or in-progress duplicate payout request." }],
+      notes: endpointNotes.b2c,
+    },
+    {
+      id: "b2b",
+      title: "B2B",
+      method: b2b.method,
+      route: b2b.route,
+      description:
+        "Transfer funds between business shortcodes. Zadhron normalizes the acceptance response and tracks the final result through the B2B callback pair.",
+      authentication: [
+        "Requires x-zadhron-app-id and x-zadhron-app-secret.",
+        "The application must be allowed to call the b2b operation.",
+        "Send Idempotency-Key for retry safety on transfer requests.",
+      ],
+      parameters: b2b.fields.map((field) => ({
+        name: field.name,
+        type: field.type,
+        required: field.required,
+        description: field.description,
+        defaultValue:
+          field.name === "commandId"
+            ? "BusinessPayBill"
+            : field.name === "senderIdentifierType" || field.name === "receiverIdentifierType"
+              ? "4"
+              : undefined,
+      })),
+      requestExamples: [
+        { label: "cURL", language: "bash", tone: "request", code: buildCurlExample(b2b, config.callbackBaseUrl) },
+        { label: "Node.js", language: "javascript", tone: "request", code: buildNodeExample(b2b, config.callbackBaseUrl) },
+      ],
+      immediateResponse: [
+        { label: "JSON", language: "json", tone: "response", code: JSON.stringify(buildExampleResponse(b2b), null, 2) },
+      ],
+      webhook: {
+        description:
+          "B2B completion is delivered asynchronously through the result and timeout callback pair.",
+        callbackUrl: `${config.callbackUrls.b2bResult} and ${config.callbackUrls.b2bTimeout}`,
+        examples: [{ label: "Result payload", language: "json", tone: "webhook", code: buildTreasuryWebhookExample("b2b") }],
+      },
+      statuses: [
+        { label: "accepted", description: "Safaricom accepted the request into the B2B queue." },
+        { label: "succeeded", description: "The result callback resolved the transfer successfully." },
+        { label: "timeout", description: "The timeout callback reported queue expiry before completion." },
+        { label: "failed", description: "The result callback or upstream request indicated failure." },
+      ],
+      errors: [...defaultErrors, { status: 409, code: "conflict_error", description: "Idempotency conflict or in-progress duplicate B2B request." }],
+      notes: endpointNotes.b2b,
+    },
+    {
+      id: "business-to-pochi",
+      title: "Business to Pochi",
+      method: businessToPochi.method,
+      route: businessToPochi.route,
+      description:
+        "Use the B2Pochi product for merchant-to-wallet disbursement when Safaricom has enabled it for your shortcode. The terminal result arrives on the B2C callback rail in the current gateway implementation.",
+      authentication: [
+        "Requires x-zadhron-app-id and x-zadhron-app-secret.",
+        "The application must be allowed to call the businessToPochi operation.",
+        "Send Idempotency-Key for retry safety on disbursement requests.",
+      ],
+      parameters: businessToPochi.fields.map((field) => ({
+        name: field.name,
+        type: field.type,
+        required: field.required,
+        description: field.description,
+        defaultValue:
+          field.name === "commandId"
+            ? "BusinessPayToPochi"
+            : field.name === "occasion"
+              ? '""'
+              : undefined,
+      })),
+      requestExamples: [
+        { label: "cURL", language: "bash", tone: "request", code: buildCurlExample(businessToPochi, config.callbackBaseUrl) },
+        { label: "Node.js", language: "javascript", tone: "request", code: buildNodeExample(businessToPochi, config.callbackBaseUrl) },
+      ],
+      immediateResponse: [
+        { label: "JSON", language: "json", tone: "response", code: JSON.stringify(buildExampleResponse(businessToPochi), null, 2) },
+      ],
+      webhook: {
+        description:
+          "Business to Pochi shares the B2C result and timeout callback URLs in the current implementation.",
+        callbackUrl: `${config.callbackUrls.b2cResult} and ${config.callbackUrls.b2cTimeout}`,
+        examples: [{ label: "Result payload", language: "json", tone: "webhook", code: buildTreasuryWebhookExample("b2c") }],
+      },
+      statuses: [
+        { label: "accepted", description: "Safaricom accepted the request into the queue." },
+        { label: "succeeded", description: "The B2C-style result callback resolved the disbursement successfully." },
+        { label: "timeout", description: "The timeout callback reported queue expiry before completion." },
+        { label: "failed", description: "The result callback or upstream request indicated failure." },
+      ],
+      errors: [...defaultErrors, { status: 409, code: "conflict_error", description: "Idempotency conflict or in-progress duplicate payout request." }],
+      notes: endpointNotes.businessToPochi,
+    },
+    {
+      id: "transaction-status",
+      title: "Transaction Status",
+      method: transactionStatus.method,
+      route: transactionStatus.route,
+      description:
+        "Ask Safaricom for the status of an existing M-Pesa transaction. This is the provider-side query surface, distinct from Zadhron's own stored transaction lookup route.",
+      authentication: [
+        "Requires x-zadhron-app-id and x-zadhron-app-secret.",
+        "The application must be allowed to call the transactionStatus operation.",
+      ],
+      parameters: transactionStatus.fields.map((field) => ({
+        name: field.name,
+        type: field.type,
+        required: field.required,
+        description: field.description,
+        defaultValue:
+          field.name === "identifierType"
+            ? "4"
+            : field.name === "commandId"
+              ? "TransactionStatusQuery"
+              : field.name === "remarks"
+                ? "Transaction status query"
+                : field.name === "occasion"
+                  ? '""'
+                  : undefined,
+      })),
+      requestExamples: [
+        { label: "cURL", language: "bash", tone: "request", code: buildCurlExample(transactionStatus, config.callbackBaseUrl) },
+        { label: "Node.js", language: "javascript", tone: "request", code: buildNodeExample(transactionStatus, config.callbackBaseUrl) },
+      ],
+      immediateResponse: [
+        { label: "JSON", language: "json", tone: "response", code: JSON.stringify(buildExampleResponse(transactionStatus), null, 2) },
+      ],
+      webhook: {
+        description:
+          "The transaction-status query completes asynchronously through the result or timeout callback.",
+        callbackUrl: `${config.callbackUrls.transactionStatusResult} and ${config.callbackUrls.transactionStatusTimeout}`,
+        examples: [{ label: "Result payload", language: "json", tone: "webhook", code: buildTreasuryWebhookExample("transactionStatus") }],
+      },
+      statuses: [
+        { label: "accepted", description: "Safaricom accepted the lookup request." },
+        { label: "succeeded", description: "The result callback returned a successful terminal answer." },
+        { label: "timeout", description: "The timeout callback reported queue expiry before completion." },
+        { label: "failed", description: "The result callback or upstream request indicated failure." },
+      ],
+      errors: defaultErrors,
+      notes: endpointNotes.transactionStatus,
+    },
+    {
+      id: "reversal",
+      title: "Reversal",
+      method: reversal.method,
+      route: reversal.route,
+      description:
+        "Request a reversal for an existing M-Pesa transaction. Treat the initial API response as acceptance only and wait for the asynchronous reversal result.",
+      authentication: [
+        "Requires x-zadhron-app-id and x-zadhron-app-secret.",
+        "The application must be allowed to call the reversal operation.",
+        "Send Idempotency-Key for retry safety on reversal requests.",
+      ],
+      parameters: reversal.fields.map((field) => ({
+        name: field.name,
+        type: field.type,
+        required: field.required,
+        description: field.description,
+        defaultValue:
+          field.name === "receiverIdentifierType"
+            ? "11"
+            : field.name === "commandId"
+              ? "TransactionReversal"
+              : field.name === "occasion"
+                ? '""'
+                : undefined,
+      })),
+      requestExamples: [
+        { label: "cURL", language: "bash", tone: "request", code: buildCurlExample(reversal, config.callbackBaseUrl) },
+        { label: "Node.js", language: "javascript", tone: "request", code: buildNodeExample(reversal, config.callbackBaseUrl) },
+      ],
+      immediateResponse: [
+        { label: "JSON", language: "json", tone: "response", code: JSON.stringify(buildExampleResponse(reversal), null, 2) },
+      ],
+      webhook: {
+        description:
+          "Reversal completion is delivered asynchronously through the result and timeout callback pair.",
+        callbackUrl: `${config.callbackUrls.reversalResult} and ${config.callbackUrls.reversalTimeout}`,
+        examples: [{ label: "Result payload", language: "json", tone: "webhook", code: buildTreasuryWebhookExample("reversal") }],
+      },
+      statuses: [
+        { label: "accepted", description: "Safaricom accepted the reversal request into its queue." },
+        { label: "succeeded", description: "The result callback resolved the reversal successfully." },
+        { label: "timeout", description: "The timeout callback reported queue expiry before completion." },
+        { label: "failed", description: "The result callback or upstream request indicated failure." },
+      ],
+      errors: [...defaultErrors, { status: 409, code: "conflict_error", description: "Idempotency conflict or in-progress duplicate reversal request." }],
+      notes: endpointNotes.reversal,
+    },
+    {
+      id: "account-balance",
+      title: "Account Balance",
+      method: accountBalance.method,
+      route: accountBalance.route,
+      description:
+        "Request the official balance snapshot for the configured shortcode. The terminal payload arrives through the account-balance result or timeout callback.",
+      authentication: [
+        "Requires x-zadhron-app-id and x-zadhron-app-secret.",
+        "The application must be allowed to call the accountBalance operation.",
+      ],
+      parameters: accountBalance.fields.map((field) => ({
+        name: field.name,
+        type: field.type,
+        required: field.required,
+        description: field.description,
+        defaultValue:
+          field.name === "identifierType"
+            ? "4"
+            : field.name === "commandId"
+              ? "AccountBalance"
+              : field.name === "remarks"
+                ? "Account balance query"
+                : undefined,
+      })),
+      requestExamples: [
+        { label: "cURL", language: "bash", tone: "request", code: buildCurlExample(accountBalance, config.callbackBaseUrl) },
+        { label: "Node.js", language: "javascript", tone: "request", code: buildNodeExample(accountBalance, config.callbackBaseUrl) },
+      ],
+      immediateResponse: [
+        { label: "JSON", language: "json", tone: "response", code: JSON.stringify(buildExampleResponse(accountBalance), null, 2) },
+      ],
+      webhook: {
+        description:
+          "Account balance completion is delivered asynchronously through the result and timeout callback pair.",
+        callbackUrl: `${config.callbackUrls.accountBalanceResult} and ${config.callbackUrls.accountBalanceTimeout}`,
+        examples: [{ label: "Result payload", language: "json", tone: "webhook", code: buildTreasuryWebhookExample("accountBalance") }],
+      },
+      statuses: [
+        { label: "accepted", description: "Safaricom accepted the balance request into its queue." },
+        { label: "succeeded", description: "The result callback returned the official balance snapshot." },
+        { label: "timeout", description: "The timeout callback reported queue expiry before completion." },
+        { label: "failed", description: "The result callback or upstream request indicated failure." },
+      ],
+      errors: defaultErrors,
+      notes: endpointNotes.accountBalance,
+    },
+  ];
 }
 
 export function DeveloperDocs({ config, operations }: Props) {
-  const operationMap = new Map(operations.map((operation) => [operation.id, operation]));
-  const dateLabel = "August 30, 2026";
+  const operationMap = new Map(operations.map((operation) => [operation.id, operation] as const));
+  const endpointDocs = createEndpointDocs(config, operationMap);
+  const additionalOperations = operations.filter(
+    (operation) =>
+      ![
+        "stkPush",
+        "stkQuery",
+        "c2bRegister",
+        "c2bSimulate",
+        "b2c",
+        "b2b",
+        "businessToPochi",
+        "transactionStatus",
+        "reversal",
+        "accountBalance",
+      ].includes(operation.id),
+  );
+
+  const sidebar: DocsSidebarSection[] = [
+    {
+      id: "getting-started",
+      title: "Getting Started",
+      items: [
+        { id: "introduction", label: "Introduction" },
+        { id: "quick-start", label: "Quick Start" },
+        { id: "authentication", label: "Authentication" },
+        { id: "environments", label: "Environments" },
+        { id: "api-keys", label: "API Keys" },
+      ],
+    },
+    {
+      id: "accept-payments",
+      title: "Accept Payments",
+      items: [
+        { id: "stk-push", label: "STK Push" },
+        { id: "stk-query", label: "STK Push Status / Query" },
+        { id: "c2b", label: "C2B" },
+      ],
+    },
+    {
+      id: "send-payments",
+      title: "Send Payments",
+      items: [
+        { id: "b2c", label: "B2C" },
+        { id: "b2b", label: "B2B" },
+        { id: "business-to-pochi", label: "Business to Pochi" },
+      ],
+    },
+    {
+      id: "transaction-management",
+      title: "Transaction Management",
+      items: [
+        { id: "transaction-record-lookup", label: "Transaction Lookup" },
+        { id: "transaction-status", label: "Transaction Status" },
+        { id: "reversal", label: "Reversals" },
+        { id: "account-balance", label: "Account Balance" },
+      ],
+    },
+    {
+      id: "webhooks",
+      title: "Webhooks",
+      items: [
+        {
+          label: "Webhook docs",
+          children: [
+            { id: "webhooks-overview", label: "Overview" },
+            { id: "webhook-configuration", label: "Configuring a webhook" },
+            { id: "webhook-event-types", label: "Event types" },
+            { id: "webhook-signatures", label: "Signature verification", planned: true },
+            { id: "webhook-retries", label: "Retries and failures" },
+          ],
+        },
+      ],
+    },
+    {
+      id: "api-reference",
+      title: "API Reference",
+      items: [
+        { id: "api-reference-requests", label: "Requests" },
+        { id: "api-reference-responses", label: "Responses" },
+        { id: "api-reference-errors", label: "Error format" },
+        { id: "api-reference-idempotency", label: "Idempotency" },
+        { id: "api-reference-http-status", label: "HTTP status codes" },
+      ],
+    },
+    {
+      id: "additional",
+      title: "Additional",
+      items: [
+        { id: "additional-operations", label: "Additional operations" },
+        { id: "changelog", label: "Changelog", planned: true },
+      ],
+    },
+  ];
+
+  const toc: DocsTocItem[] = [
+    { id: "introduction", label: "Introduction", level: 2 },
+    { id: "quick-start", label: "Quick Start", level: 2 },
+    { id: "authentication", label: "Authentication", level: 2 },
+    { id: "environments", label: "Environments", level: 2 },
+    { id: "api-keys", label: "API Keys", level: 2 },
+    { id: "stk-push", label: "STK Push", level: 2 },
+    { id: "stk-query", label: "STK Push Status / Query", level: 2 },
+    { id: "c2b", label: "C2B", level: 2 },
+    { id: "b2c", label: "B2C", level: 2 },
+    { id: "b2b", label: "B2B", level: 2 },
+    { id: "business-to-pochi", label: "Business to Pochi", level: 2 },
+    { id: "transaction-record-lookup", label: "Transaction Lookup", level: 2 },
+    { id: "transaction-status", label: "Transaction Status", level: 2 },
+    { id: "reversal", label: "Reversal", level: 2 },
+    { id: "account-balance", label: "Account Balance", level: 2 },
+    { id: "webhooks-overview", label: "Webhooks Overview", level: 2 },
+    { id: "webhook-configuration", label: "Configuring a webhook", level: 2 },
+    { id: "webhook-event-types", label: "Event types", level: 2 },
+    { id: "webhook-signatures", label: "Signature verification", level: 2 },
+    { id: "webhook-retries", label: "Retries and failures", level: 2 },
+    { id: "api-reference-requests", label: "Requests", level: 2 },
+    { id: "api-reference-responses", label: "Responses", level: 2 },
+    { id: "api-reference-errors", label: "Error format", level: 2 },
+    { id: "api-reference-idempotency", label: "Idempotency", level: 2 },
+    { id: "api-reference-http-status", label: "HTTP status codes", level: 2 },
+    { id: "additional-operations", label: "Additional operations", level: 2 },
+    { id: "changelog", label: "Changelog", level: 2 },
+  ];
+
+  const storedStatusDoc: EndpointDoc = {
+    id: "transaction-record-lookup",
+    title: "Stored Transaction Lookup",
+    method: "GET",
+    route: "/api/mpesa/transactions/status",
+    description:
+      "Read the latest Zadhron-known status for a previously created transaction by requestId, checkoutRequestId, idempotencyKey, or accountReference. This route returns Zadhron's stored record, not a live Safaricom query.",
+    authentication: [
+      "Requires x-zadhron-app-id and x-zadhron-app-secret.",
+      "The current implementation authenticates this route using the same application auth layer as STK Push access.",
+      "Provide one of requestId, checkoutRequestId, idempotencyKey, or accountReference as a query parameter.",
+    ],
+    parameters: [
+      { name: "requestId", type: "query", required: false, description: "Original Zadhron requestId returned in the normalized response." },
+      { name: "checkoutRequestId", type: "query", required: false, description: "Earlier CheckoutRequestID returned by STK Push." },
+      { name: "idempotencyKey", type: "query", required: false, description: "Idempotency-Key used on the original request." },
+      { name: "accountReference", type: "query", required: false, description: "Your earlier reference value, when stored on the transaction." },
+    ],
+    requestExamples: [
+      { label: "cURL", language: "bash", tone: "request", code: buildStoredStatusCurlExample(config.callbackBaseUrl) },
+      { label: "Node.js", language: "javascript", tone: "request", code: buildStoredStatusNodeExample(config.callbackBaseUrl) },
+    ],
+    immediateResponse: [
+      { label: "JSON", language: "json", tone: "response", code: buildStoredStatusResponseExample() },
+    ],
+    statuses: [
+      { label: "pending", description: "The transaction exists, but Zadhron has not received a terminal callback yet." },
+      { label: "accepted", description: "The provider accepted an asynchronous operation and a callback is still pending." },
+      { label: "succeeded", description: "A terminal success callback or reconciliation result has been stored." },
+      { label: "failed", description: "A terminal failure callback or failed upstream request has been stored." },
+      { label: "cancelled", description: "The transaction reached a cancelled terminal state." },
+      { label: "timeout", description: "A timeout callback was stored for the operation." },
+    ],
+    errors: [
+      { status: 400, code: "bad_request", description: "No supported lookup parameter was provided." },
+      { status: 401, code: "authentication_error", description: "The supplied application credentials were rejected." },
+      { status: 404, code: "not_found", description: "No stored transaction matched the supplied lookup value for this application." },
+      { status: 500, code: "internal_error", description: "The transaction store could not be read." },
+    ],
+  };
 
   return (
-    <main className="bg-[#f6efe4] px-5 py-12 text-slate-950 sm:px-8 lg:py-16">
-      <div className="mx-auto max-w-[1440px] space-y-8">
-        <section className="overflow-hidden rounded-[2.6rem] border border-slate-200 bg-[linear-gradient(135deg,#fffaf1_0%,#fff 48%,#edf6ff_100%)] shadow-[0_28px_90px_rgba(12,18,27,0.08)]">
-          <div className="grid gap-8 px-8 py-10 lg:grid-cols-[1.1fr_0.9fr] lg:px-12 lg:py-12">
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.18em] text-sky-700">Developer docs</div>
-              <h1 className="mt-5 max-w-3xl text-4xl font-semibold tracking-[-0.06em] text-slate-950 sm:text-5xl">
-                Detailed API reference for the Node.js M-Pesa gateway.
-              </h1>
-              <p className="mt-6 max-w-2xl text-base leading-8 text-slate-600">
-                This reference documents the live request contract enforced by the gateway on{" "}
-                {dateLabel}. It covers application authentication, idempotency behavior, normalized
-                responses, callback routing, and every supported `/api/mpesa/*` operation exposed by
-                the Node.js deployment.
-              </p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <a
-                  href="#quickstart"
-                  className="rounded-full bg-slate-950 px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800"
-                >
-                  Jump to quickstart
-                </a>
-                <a
-                  href="#operations"
-                  className="rounded-full border border-slate-300 px-5 py-3 text-sm text-slate-700 transition hover:border-slate-400 hover:bg-white"
-                >
-                  Browse endpoints
-                </a>
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-[1.8rem] border border-slate-200 bg-white/90 p-5">
-                <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Base URL</div>
-                <div className="mono mt-3 break-all text-sm text-slate-900">{config.callbackBaseUrl}</div>
-                <p className="mt-3 text-sm leading-7 text-slate-600">
-                  Application requests and callback routes are served from the same deployment.
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(193,223,255,0.38),transparent_24%),linear-gradient(180deg,#f4f7fb_0%,#f8fbff_26%,#eef3f9_100%)] text-slate-950">
+      <DeveloperDocsShell sidebar={sidebar} toc={toc}>
+        <div className="space-y-8">
+          <section className="overflow-hidden rounded-[2.4rem] border border-slate-200 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.09)]">
+            <div className="border-b border-slate-200 bg-[linear-gradient(135deg,#0a1322_0%,#0c1a31_48%,#102543_100%)] px-6 py-8 text-white sm:px-8 sm:py-10">
+              <div className="max-w-4xl">
+                <div className="text-[11px] uppercase tracking-[0.2em] text-sky-200">Zadhron Payments</div>
+                <h1 className="mt-4 text-4xl font-semibold tracking-[-0.06em] sm:text-5xl">
+                  Developer documentation for the live M-Pesa gateway surface.
+                </h1>
+                <p className="mt-5 max-w-3xl text-base leading-8 text-slate-200">
+                  This page documents the gateway behavior currently implemented in this project as of
+                  August 31, 2026: application authentication, normalized request and response envelopes,
+                  STK collection flows, treasury operations, provider callbacks, and transaction lookup.
                 </p>
-              </div>
-              <div className="rounded-[1.8rem] border border-slate-200 bg-white/90 p-5">
-                <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Upstream</div>
-                <div className="mono mt-3 break-all text-sm text-slate-900">{config.mpesaBaseUrl}</div>
-                <p className="mt-3 text-sm leading-7 text-slate-600">
-                  Current gateway environment: <span className="font-medium text-slate-900">{config.mpesaEnvironment}</span>.
-                </p>
-              </div>
-              <div className="rounded-[1.8rem] border border-slate-200 bg-white/90 p-5">
-                <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Operations</div>
-                <div className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-slate-950">{operations.length}</div>
-                <p className="mt-3 text-sm leading-7 text-slate-600">
-                  Every public route in the operation catalog is documented below from the same source
-                  used by the admin endpoint tester.
-                </p>
-              </div>
-              <div className="rounded-[1.8rem] border border-slate-200 bg-white/90 p-5">
-                <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Callback guard</div>
-                <div className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-slate-950">
-                  {config.callbackAllowedIps.length ? "Restricted" : "Open"}
-                </div>
-                <p className="mt-3 text-sm leading-7 text-slate-600">
-                  {config.callbackAllowedIps.length
-                    ? `Safaricom callback intake is currently filtered by ${config.callbackAllowedIps.length} allowed source IP${config.callbackAllowedIps.length === 1 ? "" : "s"}.`
-                    : "No callback source allowlist is configured in the current environment."}
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <div className="grid gap-8 xl:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="xl:sticky xl:top-24 xl:self-start">
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(7,16,25,0.06)]">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">On this page</div>
-              <nav className="mt-5 space-y-2 text-sm text-slate-700">
-                {[
-                  ["quickstart", "Quickstart"],
-                  ["security", "Authentication"],
-                  ["responses", "Responses"],
-                  ["operations", "Endpoint reference"],
-                  ["callbacks", "Callbacks"],
-                ].map(([href, label]) => (
+                <div className="mt-6 flex flex-wrap gap-3">
                   <a
-                    key={href}
-                    href={`#${href}`}
-                    className="block rounded-full px-3 py-2 transition hover:bg-slate-100 hover:text-slate-950"
+                    href="#quick-start"
+                    style={{ color: "#08111a" }}
+                    className="rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
                   >
-                    {label}
+                    Start integrating
                   </a>
-                ))}
-              </nav>
-              <div className="mt-6 border-t border-slate-200 pt-6">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Headers</div>
-                <div className="mono mt-3 text-xs leading-7 text-slate-600">
-                  <div>`x-zadhron-app-id`</div>
-                  <div>`x-zadhron-app-secret`</div>
-                  <div>`Idempotency-Key`</div>
-                  <div>`x-request-id`</div>
+                  <a
+                    href="#api-reference-requests"
+                    className="rounded-full border border-white/15 px-5 py-3 text-sm text-white transition hover:bg-white/6 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
+                  >
+                    Common request contract
+                  </a>
                 </div>
               </div>
             </div>
-          </aside>
 
-          <div className="space-y-8">
-            <section id="quickstart" className="rounded-[2.4rem] border border-slate-200 bg-white p-8 shadow-[0_20px_60px_rgba(7,16,25,0.06)] sm:p-10">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-sky-700">Quickstart</div>
-              <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em]">Call the gateway in four steps.</h2>
-              <div className="mt-8 grid gap-4 lg:grid-cols-4">
-                {[
-                  {
-                    title: "1. Get application credentials",
-                    body: "The gateway authenticates each request with x-zadhron-app-id and x-zadhron-app-secret.",
-                  },
-                  {
-                    title: "2. Send a scoped request",
-                    body: "Call the route your application has been granted. Scope names match the operation ids below.",
-                  },
-                  {
-                    title: "3. Read the normalized response",
-                    body: "Every route returns a shared response envelope with operation, status, timestamps, upstream metadata, and request id.",
-                  },
-                  {
-                    title: "4. Wait for callbacks when async",
-                    body: "STK, B2C, B2B, reversal, status, and balance flows can finish later through callback routes.",
-                  },
-                ].map((item) => (
-                  <article key={item.title} className="rounded-[1.6rem] border border-slate-200 bg-[#fbfaf7] p-5">
-                    <div className="text-base font-semibold text-slate-950">{item.title}</div>
-                    <p className="mt-3 text-sm leading-7 text-slate-600">{item.body}</p>
-                  </article>
-                ))}
-              </div>
-
-              <div className="mt-8 rounded-[1.8rem] border border-slate-200 bg-[#09111a] p-6 text-slate-100">
-                <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Example request</div>
-                <pre className="mono mt-4 overflow-x-auto text-sm leading-7">
-{buildCurlExample(operationMap.get("stkPush")!, config.callbackBaseUrl)}
-                </pre>
-              </div>
-            </section>
-
-            <section id="security" className="rounded-[2.4rem] border border-slate-200 bg-white p-8 shadow-[0_20px_60px_rgba(7,16,25,0.06)] sm:p-10">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-sky-700">Authentication</div>
-              <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em]">Application auth, scopes, and retry safety.</h2>
-              <div className="mt-8 grid gap-5 lg:grid-cols-2">
-                <div className="rounded-[1.8rem] border border-slate-200 bg-[#fbfaf7] p-6">
-                  <h3 className="text-lg font-semibold text-slate-950">Required request headers</h3>
-                  <div className="mono mt-4 space-y-3 text-sm text-slate-700">
-                    <div>`x-zadhron-app-id`: configured application id</div>
-                    <div>`x-zadhron-app-secret`: configured application secret</div>
-                    <div>`Content-Type: application/json`: required for JSON bodies</div>
-                    <div>`Idempotency-Key`: optional but recommended for money-moving routes</div>
-                  </div>
-                </div>
-                <div className="rounded-[1.8rem] border border-slate-200 bg-[#fbfaf7] p-6">
-                  <h3 className="text-lg font-semibold text-slate-950">What the gateway enforces</h3>
-                  <ul className="mt-4 space-y-3 text-sm leading-7 text-slate-600">
-                    <li>Application ids must exist, be enabled, and have a matching secret.</li>
-                    <li>Scopes are checked per operation id. A wildcard `*` also passes authorization.</li>
-                    <li>Per-application rate limits apply when configured for that application.</li>
-                    <li>Callback routes are separate from application auth and are intended for Safaricom delivery.</li>
-                  </ul>
-                </div>
-              </div>
-            </section>
-
-            <section id="responses" className="rounded-[2.4rem] border border-slate-200 bg-white p-8 shadow-[0_20px_60px_rgba(7,16,25,0.06)] sm:p-10">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-sky-700">Responses</div>
-              <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em]">A shared response envelope across operations.</h2>
-              <div className="mt-8 grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
-                <div className="rounded-[1.8rem] border border-slate-200 bg-[#fbfaf7] p-6">
-                  <h3 className="text-lg font-semibold text-slate-950">Common fields</h3>
-                  <ul className="mt-4 space-y-3 text-sm leading-7 text-slate-600">
-                    <li>`success`: boolean success flag for the gateway request itself.</li>
-                    <li>`operation`: the internal operation id, which also doubles as the auth scope.</li>
-                    <li>`status`: normalized transaction status such as `pending`, `accepted`, `succeeded`, `failed`, `cancelled`, or `timeout`.</li>
-                    <li>`upstream`: condensed provider metadata such as response code, conversation id, and provider request ids.</li>
-                    <li>`meta`: gateway metadata including application id, latency, and idempotency replay context.</li>
-                    <li>The HTTP response also includes the `x-request-id` header for tracing.</li>
-                  </ul>
-                </div>
-                <div className="rounded-[1.8rem] border border-slate-200 bg-[#09111a] p-6 text-slate-100">
-                  <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Sample normalized payload</div>
-                  <pre className="mono mt-4 overflow-x-auto text-sm leading-7">
-{JSON.stringify(buildExampleResponse(operationMap.get("stkPush")!), null, 2)}
-                  </pre>
-                </div>
-              </div>
-            </section>
-
-            <section id="operations" className="space-y-8">
-              <div className="rounded-[2.4rem] border border-slate-200 bg-white p-8 shadow-[0_20px_60px_rgba(7,16,25,0.06)] sm:p-10">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-sky-700">Endpoint reference</div>
-                <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em]">Every supported route, grouped by job to be done.</h2>
-                <p className="mt-4 max-w-3xl text-sm leading-8 text-slate-600">
-                  The cards below are generated from the live operation catalog. Each route shows the
-                  public endpoint, the exact scope id your application needs, request fields, callback
-                  dependencies, and example request or response bodies.
+            <div className="grid gap-4 px-6 py-6 sm:px-8 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="rounded-[1.6rem] border border-slate-200 bg-[#f8fbff] p-5">
+                <DocHeading as="h2" id="introduction" className="text-2xl font-semibold tracking-[-0.04em]">
+                  Introduction
+                </DocHeading>
+                <p className="mt-4 text-sm leading-8 text-slate-600">
+                  Zadhron Payments exposes a single authenticated HTTP surface in front of Safaricom
+                  M-Pesa operations. Developers can initiate STK Push requests, register or simulate C2B,
+                  send payouts with B2C, B2B, and Business to Pochi, query transaction state, request reversals,
+                  and receive asynchronous Safaricom callbacks through stable Zadhron routes.
+                </p>
+                <p className="mt-4 text-sm leading-8 text-slate-600">
+                  The public API is organized around normalized fields such as <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">requestId</code>,
+                  <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">status</code>, and application-scoped auth.
+                  Safaricom-specific identifiers such as <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">CheckoutRequestID</code>,
+                  <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">ConversationID</code>, and receipt numbers are still preserved when relevant,
+                  but they are not the primary integration model.
                 </p>
               </div>
 
-              {operationGroups.map((group) => {
-                const groupOperations = group.operations
-                  .map((id) => operationMap.get(id))
-                  .filter((item): item is OperationDefinition => Boolean(item));
+              <div className="rounded-[1.6rem] border border-slate-200 bg-[#0d1726] p-5 text-slate-100">
+                <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Integration sequence</div>
+                <ol className="mt-4 space-y-4 text-sm leading-7 text-slate-200">
+                  <li>1. Configure a Zadhron application and obtain an application id and secret.</li>
+                  <li>2. Send a request to a permitted route such as STK Push or B2C.</li>
+                  <li>3. Read the normalized immediate response and save requestId plus upstream identifiers.</li>
+                  <li>4. Wait for the Safaricom callback or query status with STK Query or transaction lookup.</li>
+                </ol>
+              </div>
+            </div>
+          </section>
 
-                if (!groupOperations.length) {
-                  return null;
-                }
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+            <DocHeading as="h2" id="quick-start" className="text-3xl font-semibold tracking-[-0.05em]">
+              Quick Start
+            </DocHeading>
+            <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">
+              The shortest accurate path through the current gateway is:
+            </p>
+            <div className="mt-6 rounded-[1.6rem] border border-slate-200 bg-[#f8fbff] p-5">
+              <div className="mono text-sm leading-8 text-slate-900">
+                Create account or operator setup → Provision application credentials → Make API request → Receive immediate normalized response → Zadhron forwards to M-Pesa → Receive Safaricom callback or query transaction state
+              </div>
+            </div>
+            <div className="mt-6 grid gap-4 lg:grid-cols-3">
+              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+                <div className="text-sm font-semibold text-slate-950">Immediate response</div>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  Save <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">requestId</code>, the normalized
+                  <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">status</code>, and upstream ids such as
+                  <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">CheckoutRequestID</code> or
+                  <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">ConversationID</code>.
+                </p>
+              </div>
+              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+                <div className="text-sm font-semibold text-slate-950">Asynchronous outcome</div>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  STK Push, B2C, B2B, Business to Pochi, transaction status, reversal, and account balance all complete later through callbacks.
+                </p>
+              </div>
+              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+                <div className="text-sm font-semibold text-slate-950">Recovery path</div>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  Use STK Query for handset flows and the stored transaction lookup route for the latest Zadhron-known transaction state.
+                </p>
+              </div>
+            </div>
+          </section>
 
+          <section className="grid gap-6 xl:grid-cols-2">
+            <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+              <DocHeading as="h2" id="authentication" className="text-3xl font-semibold tracking-[-0.05em]">
+                Authentication
+              </DocHeading>
+              <p className="mt-4 text-sm leading-8 text-slate-600">
+                Every public application route uses header-based application authentication. The current gateway does
+                not accept bearer tokens for these M-Pesa routes.
+              </p>
+              <div className="mt-6 space-y-3 rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5 text-sm text-slate-700">
+                <div><code className="mono text-slate-950">x-zadhron-app-id</code>: configured application id</div>
+                <div><code className="mono text-slate-950">x-zadhron-app-secret</code>: configured application secret</div>
+                <div><code className="mono text-slate-950">Content-Type: application/json</code>: required for JSON request bodies</div>
+                <div><code className="mono text-slate-950">Idempotency-Key</code>: optional, but recommended for money-moving routes</div>
+              </div>
+              <ul className="mt-6 space-y-3 text-sm leading-7 text-slate-600">
+                <li>Applications must be enabled and their secret must match exactly.</li>
+                <li>Authorization is scope-based and each scope maps to an operation id such as <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">stkPush</code> or <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">b2c</code>.</li>
+                <li>A wildcard <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">*</code> scope also passes authorization.</li>
+                <li>Optional per-application rate limits return <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">429 rate_limit_exceeded</code> when breached.</li>
+              </ul>
+            </section>
+
+            <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+              <DocHeading as="h2" id="environments" className="text-3xl font-semibold tracking-[-0.05em]">
+                Environments
+              </DocHeading>
+              <p className="mt-4 text-sm leading-8 text-slate-600">
+                The public Zadhron routes stay stable per deployment. The upstream Safaricom environment is selected
+                internally through <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">MPESA_ENVIRONMENT</code>.
+              </p>
+              <div className="mt-6 overflow-hidden rounded-[1.4rem] border border-slate-200">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3">Setting</th>
+                      <th className="px-4 py-3">Upstream base URL</th>
+                      <th className="px-4 py-3">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    <tr className="border-t border-slate-200">
+                      <td className="mono px-4 py-3 text-slate-950">sandbox</td>
+                      <td className="mono px-4 py-3 text-slate-600">https://sandbox.safaricom.co.ke</td>
+                      <td className="px-4 py-3 text-slate-600">Use for development, callback testing, and C2B simulation.</td>
+                    </tr>
+                    <tr className="border-t border-slate-200">
+                      <td className="mono px-4 py-3 text-slate-950">production</td>
+                      <td className="mono px-4 py-3 text-slate-600">https://api.safaricom.co.ke</td>
+                      <td className="px-4 py-3 text-slate-600">Maps to live transaction storage semantics inside the database layer.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-5 text-sm leading-7 text-slate-600">
+                Callback URLs are composed from <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">MPESA_CALLBACK_BASE_URL</code> or
+                <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">PUBLIC_BASE_URL</code>, with optional per-callback overrides when needed.
+              </p>
+            </section>
+          </section>
+
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+            <DocHeading as="h2" id="api-keys" className="text-3xl font-semibold tracking-[-0.05em]">
+              API Keys
+            </DocHeading>
+            <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">
+              The broader Zadhron product has a merchant API keys data model and dashboard surface, but the
+              current public M-Pesa gateway implementation authenticates requests with configured applications from
+              <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">GATEWAY_APPLICATIONS_JSON</code>.
+            </p>
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+                <div className="text-sm font-semibold text-slate-950">Implemented today</div>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  Provision an application id, secret, scopes, enabled state, and optional rate limit in gateway configuration.
+                  Public route auth checks these values directly at request time.
+                </p>
+              </div>
+              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+                <div className="flex items-center gap-3">
+                  <div className="text-sm font-semibold text-slate-950">Merchant self-service keys</div>
+                  <span className="rounded-full border border-slate-300 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                    Planned
+                  </span>
+                </div>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  Merchant key records appear in the database schema and dashboard read model, but key creation and public
+                  route enforcement are not yet documented as an active self-service feature in this application.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {endpointDocs.slice(0, 2).map((doc) => (
+            <EndpointArticle key={doc.id} doc={doc} />
+          ))}
+
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+            <DocHeading as="h2" id="c2b" className="text-3xl font-semibold tracking-[-0.05em]">
+              C2B
+            </DocHeading>
+            <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">
+              The current gateway exposes two C2B routes: one to register Safaricom confirmation and validation URLs,
+              and one to simulate a C2B payment in sandbox. Incoming confirmation callbacks can also help reconcile a
+              pending STK transaction when the handset callback is missing.
+            </p>
+            <div className="mt-6 grid gap-6 xl:grid-cols-2">
+              <div className="rounded-[1.6rem] border border-slate-200 bg-[#fafbfd] p-5">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="rounded-full bg-sky-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-900">
+                    POST
+                  </span>
+                  <code className="mono rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-700">
+                    /api/mpesa/c2b/register
+                  </code>
+                </div>
+                <div className="mt-4 text-lg font-semibold text-slate-950">Register URLs</div>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  Registers the C2B confirmation and validation callback URLs currently configured by the gateway.
+                  The only supported input parameter is <code className="mono rounded bg-white px-1.5 py-0.5 text-xs">responseType</code>,
+                  which defaults to <code className="mono rounded bg-white px-1.5 py-0.5 text-xs">Completed</code>.
+                </p>
+                <div className="mt-4 rounded-[1.3rem] border border-slate-200 bg-white p-4">
+                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Configured callback URLs</div>
+                  <div className="mono mt-3 break-all text-xs text-slate-700">{config.callbackUrls.c2bConfirmation}</div>
+                  <div className="mono mt-2 break-all text-xs text-slate-700">{config.callbackUrls.c2bValidation}</div>
+                </div>
+              </div>
+
+              <div className="rounded-[1.6rem] border border-slate-200 bg-[#fafbfd] p-5">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="rounded-full bg-sky-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-900">
+                    POST
+                  </span>
+                  <code className="mono rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-700">
+                    /api/mpesa/c2b/simulate
+                  </code>
+                </div>
+                <div className="mt-4 text-lg font-semibold text-slate-950">Simulate payment</div>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  Sandbox-only in practical use. Send amount, customer MSISDN, bill reference, and optionally a shortcode override.
+                  A successful response means Safaricom accepted the simulated collection request.
+                </p>
+                <DocsCodeTabs
+                  title="C2B callback example"
+                  description="A successful confirmation callback is a plain payload rather than a nested STK body."
+                  tabs={[
+                    {
+                      label: "Confirmation",
+                      language: "json",
+                      tone: "webhook",
+                      code: buildC2bConfirmationExample(),
+                    },
+                  ]}
+                />
+              </div>
+            </div>
+          </section>
+
+          {endpointDocs.slice(2, 5).map((doc) => (
+            <EndpointArticle key={doc.id} doc={doc} />
+          ))}
+
+          <EndpointArticle doc={storedStatusDoc} />
+
+          {endpointDocs.slice(5).map((doc) => (
+            <EndpointArticle key={doc.id} doc={doc} />
+          ))}
+
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+            <DocHeading as="h2" id="webhooks-overview" className="text-3xl font-semibold tracking-[-0.05em]">
+              Webhooks Overview
+            </DocHeading>
+            <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">
+              In the current implementation, the webhook story is primarily inbound Safaricom callback intake. Zadhron
+              receives provider callbacks, persists the raw payload in provider events storage when available, attempts
+              to reconcile the callback to a transaction, updates the normalized transaction record, and returns an
+              acknowledgement payload of <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">{"{ ResultCode: 0, ResultDesc: \"Accepted\" }"}</code>.
+            </p>
+          </section>
+
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+            <DocHeading as="h2" id="webhook-configuration" className="text-3xl font-semibold tracking-[-0.05em]">
+              Configuring a webhook
+            </DocHeading>
+            <div className="grid gap-6 xl:grid-cols-2">
+              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+                <div className="text-sm font-semibold text-slate-950">Safaricom callback intake</div>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  Configure <code className="mono rounded bg-white px-1.5 py-0.5 text-xs">MPESA_CALLBACK_BASE_URL</code> or
+                  <code className="mono rounded bg-white px-1.5 py-0.5 text-xs">PUBLIC_BASE_URL</code>. The gateway then derives the primary
+                  <code className="mono rounded bg-white px-1.5 py-0.5 text-xs">/api/mpesa/callbacks/*</code> URLs and legacy
+                  <code className="mono rounded bg-white px-1.5 py-0.5 text-xs">/callbacks/payments/*</code> aliases automatically.
+                </p>
+              </div>
+              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+                <div className="text-sm font-semibold text-slate-950">Merchant outbound webhooks</div>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  The database schema and merchant dashboard include webhook records for Zadhron-to-merchant delivery,
+                  but public delivery, signing, and retry behavior are not yet presented as a complete application feature.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+            <DocHeading as="h2" id="webhook-event-types" className="text-3xl font-semibold tracking-[-0.05em]">
+              Event types
+            </DocHeading>
+            <div className="mt-6 grid gap-4 xl:grid-cols-2">
+              {callbackDocs.map((callback) => (
+                <article key={callback.key} className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+                  <div className="text-sm font-semibold text-slate-950">{callback.label}</div>
+                  <div className="mono mt-2 break-all text-xs text-slate-500">{config.callbackUrls[callback.key]}</div>
+                  <p className="mt-3 text-sm leading-7 text-slate-600">{callback.purpose}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+            <DocHeading as="h2" id="webhook-signatures" className="text-3xl font-semibold tracking-[-0.05em]">
+              Signature verification
+            </DocHeading>
+            <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-5">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="rounded-full border border-amber-300 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-amber-800">
+                  Planned
+                </span>
+                <span className="text-sm font-semibold text-amber-950">No callback signature verification is implemented in the current gateway.</span>
+              </div>
+              <p className="mt-3 text-sm leading-7 text-amber-900/85">
+                The implemented protection for inbound callbacks is optional source-IP allowlisting through
+                <code className="mono rounded bg-white px-1.5 py-0.5 text-xs">MPESA_CALLBACK_ALLOWED_IPS</code>.
+                Do not document or rely on signed callback headers for this deployment until that feature is actually wired.
+              </p>
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+            <DocHeading as="h2" id="webhook-retries" className="text-3xl font-semibold tracking-[-0.05em]">
+              Retries and failures
+            </DocHeading>
+            <div className="grid gap-4 xl:grid-cols-3">
+              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+                <div className="text-sm font-semibold text-slate-950">Inbound callback acceptance</div>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  Callback handlers return an Accepted payload after processing. Raw callback payloads are also stored when the database layer is available.
+                </p>
+              </div>
+              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+                <div className="text-sm font-semibold text-slate-950">IP filtering</div>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  When <code className="mono rounded bg-white px-1.5 py-0.5 text-xs">MPESA_CALLBACK_ALLOWED_IPS</code> is set, callback requests from other IPs fail authentication.
+                </p>
+              </div>
+              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+                <div className="text-sm font-semibold text-slate-950">Delayed STK completion</div>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  Use STK Query for recovery. The admin side also includes a pending-STK reconciliation path that queries stale CheckoutRequestIDs and updates stored records.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+            <DocHeading as="h2" id="api-reference-requests" className="text-3xl font-semibold tracking-[-0.05em]">
+              Requests
+            </DocHeading>
+            <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">
+              All public routes live under <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">/api/mpesa/*</code>. Request
+              payloads use a developer-facing schema, and the gateway reshapes them into the corresponding Safaricom contract.
+            </p>
+            <div className="mt-6 overflow-hidden rounded-[1.4rem] border border-slate-200">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-50 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Header</th>
+                    <th className="px-4 py-3">Required</th>
+                    <th className="px-4 py-3">Purpose</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white">
+                  <tr className="border-t border-slate-200">
+                    <td className="mono px-4 py-3 text-slate-950">x-zadhron-app-id</td>
+                    <td className="px-4 py-3 text-slate-600">Yes</td>
+                    <td className="px-4 py-3 text-slate-600">Identifies the configured application making the call.</td>
+                  </tr>
+                  <tr className="border-t border-slate-200">
+                    <td className="mono px-4 py-3 text-slate-950">x-zadhron-app-secret</td>
+                    <td className="px-4 py-3 text-slate-600">Yes</td>
+                    <td className="px-4 py-3 text-slate-600">Authenticates the application and authorizes its operation scopes.</td>
+                  </tr>
+                  <tr className="border-t border-slate-200">
+                    <td className="mono px-4 py-3 text-slate-950">Content-Type</td>
+                    <td className="px-4 py-3 text-slate-600">For POST</td>
+                    <td className="px-4 py-3 text-slate-600">Use application/json for request bodies.</td>
+                  </tr>
+                  <tr className="border-t border-slate-200">
+                    <td className="mono px-4 py-3 text-slate-950">Idempotency-Key</td>
+                    <td className="px-4 py-3 text-slate-600">Recommended</td>
+                    <td className="px-4 py-3 text-slate-600">Prevents duplicate money-moving requests when a client retries after transport uncertainty.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+            <DocHeading as="h2" id="api-reference-responses" className="text-3xl font-semibold tracking-[-0.05em]">
+              Responses
+            </DocHeading>
+            <div className="grid gap-6 xl:grid-cols-[0.88fr_1.12fr]">
+              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+                <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Normalized envelope</div>
+                <ul className="mt-4 space-y-3 text-sm leading-7 text-slate-600">
+                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">success</code>: whether the gateway call succeeded</li>
+                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">operation</code>: the operation id and scope name</li>
+                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">requestId</code>: trace identifier also returned as the HTTP <code className="mono rounded bg-white px-1.5 py-0.5 text-xs">x-request-id</code> header</li>
+                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">status</code>: normalized state such as pending, accepted, succeeded, failed, cancelled, or timeout</li>
+                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">data</code>: provider response payload when successful</li>
+                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">upstream</code>: condensed provider metadata</li>
+                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">meta</code>: gateway metadata such as applicationId, latencyMs, and idempotency context</li>
+                </ul>
+              </div>
+              <DocsCodeTabs
+                title="Sample normalized payload"
+                description="An STK Push response is typically pending at HTTP time and becomes final later through callbacks or query."
+                tabs={[
+                  {
+                    label: "STK Push",
+                    language: "json",
+                    tone: "response",
+                    code: JSON.stringify(buildExampleResponse(getOperation(operationMap, "stkPush")), null, 2),
+                  },
+                ]}
+              />
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+            <DocHeading as="h2" id="api-reference-errors" className="text-3xl font-semibold tracking-[-0.05em]">
+              Error format
+            </DocHeading>
+            <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+                <div className="text-sm font-semibold text-slate-950">Common error codes</div>
+                <ul className="mt-4 space-y-3 text-sm leading-7 text-slate-600">
+                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">authentication_error</code>: credentials or callback source IP rejected</li>
+                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">authorization_error</code>: application lacks the required scope</li>
+                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">validation_error</code>: request body or configuration invalid</li>
+                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">conflict_error</code>: idempotency collision or duplicate in-flight request</li>
+                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">rate_limit_exceeded</code>: configured per-application rate limit reached</li>
+                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">mpesa_request_failed</code>: upstream Safaricom request failed</li>
+                </ul>
+              </div>
+              <DocsCodeTabs
+                title="Error example"
+                description="Gateway failures still use the same envelope shape and include the operation plus requestId."
+                tabs={[
+                  {
+                    label: "JSON",
+                    language: "json",
+                    tone: "response",
+                    code: buildErrorExample("stkPush"),
+                  },
+                ]}
+              />
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+            <DocHeading as="h2" id="api-reference-idempotency" className="text-3xl font-semibold tracking-[-0.05em]">
+              Idempotency
+            </DocHeading>
+            <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">
+              The gateway currently applies idempotency to money-moving routes when the caller sends an
+              <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">Idempotency-Key</code>. The fingerprint includes the
+              operation, application id, and serialized request payload.
+            </p>
+            <div className="mt-6 grid gap-4 xl:grid-cols-3">
+              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+                <div className="text-sm font-semibold text-slate-950">First request</div>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  The gateway marks the key as processing, performs the upstream call, then stores the normalized response.
+                </p>
+              </div>
+              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+                <div className="text-sm font-semibold text-slate-950">Exact replay</div>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  The stored response is replayed and <code className="mono rounded bg-white px-1.5 py-0.5 text-xs">meta.replayed</code> is set to true.
+                </p>
+              </div>
+              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+                <div className="text-sm font-semibold text-slate-950">Mismatched reuse</div>
+                <p className="mt-3 text-sm leading-7 text-slate-600">
+                  Reusing the same key with a different payload or while the original request is still running returns a 409 conflict.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+            <DocHeading as="h2" id="api-reference-http-status" className="text-3xl font-semibold tracking-[-0.05em]">
+              HTTP status codes
+            </DocHeading>
+            <div className="overflow-hidden rounded-[1.4rem] border border-slate-200">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-50 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Meaning</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white">
+                  <tr className="border-t border-slate-200">
+                    <td className="mono px-4 py-3 text-slate-950">200</td>
+                    <td className="px-4 py-3 text-slate-600">Synchronous success or accepted provider response.</td>
+                  </tr>
+                  <tr className="border-t border-slate-200">
+                    <td className="mono px-4 py-3 text-slate-950">202</td>
+                    <td className="px-4 py-3 text-slate-600">Typical immediate STK Push acceptance while the transaction remains pending.</td>
+                  </tr>
+                  <tr className="border-t border-slate-200">
+                    <td className="mono px-4 py-3 text-slate-950">401</td>
+                    <td className="px-4 py-3 text-slate-600">Authentication failed.</td>
+                  </tr>
+                  <tr className="border-t border-slate-200">
+                    <td className="mono px-4 py-3 text-slate-950">403</td>
+                    <td className="px-4 py-3 text-slate-600">Authenticated application lacks permission for the requested operation.</td>
+                  </tr>
+                  <tr className="border-t border-slate-200">
+                    <td className="mono px-4 py-3 text-slate-950">409</td>
+                    <td className="px-4 py-3 text-slate-600">Idempotency conflict or duplicate in-flight request.</td>
+                  </tr>
+                  <tr className="border-t border-slate-200">
+                    <td className="mono px-4 py-3 text-slate-950">422</td>
+                    <td className="px-4 py-3 text-slate-600">Request validation failed.</td>
+                  </tr>
+                  <tr className="border-t border-slate-200">
+                    <td className="mono px-4 py-3 text-slate-950">429</td>
+                    <td className="px-4 py-3 text-slate-600">Application rate limit exceeded.</td>
+                  </tr>
+                  <tr className="border-t border-slate-200">
+                    <td className="mono px-4 py-3 text-slate-950">502 / 503</td>
+                    <td className="px-4 py-3 text-slate-600">Safaricom request failure or indeterminate upstream state.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+            <DocHeading as="h2" id="additional-operations" className="text-3xl font-semibold tracking-[-0.05em]">
+              Additional operations
+            </DocHeading>
+            <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">
+              The following routes exist in the operation catalog but are intentionally kept out of the primary quick-start path
+              because they are more provider-specific, pass-through, or operationally specialized.
+            </p>
+            <div className="mt-6 grid gap-4 xl:grid-cols-2">
+              {additionalOperations.map((operation) => {
+                const callbacks = relatedCallbacks(operation.id, config);
                 return (
-                  <section key={group.id} className="rounded-[2.4rem] border border-slate-200 bg-white p-8 shadow-[0_20px_60px_rgba(7,16,25,0.06)] sm:p-10">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-sky-700">{group.eyebrow}</div>
-                    <h3 className="mt-4 text-3xl font-semibold tracking-[-0.04em]">{group.title}</h3>
-                    <p className="mt-4 max-w-3xl text-sm leading-8 text-slate-600">{group.description}</p>
-
-                    <div className="mt-8 space-y-6">
-                      {groupOperations.map((operation) => {
-                        const requestExample = buildExampleRequest(operation);
-                        const responseExample = buildExampleResponse(operation);
-                        const relatedCallbacks = callbacksForOperation(operation.id);
-
-                        return (
-                          <article
-                            key={operation.id}
-                            id={toAnchor(operation.id)}
-                            className="overflow-hidden rounded-[2rem] border border-slate-200 bg-[#fcfbf8]"
-                          >
-                            <div className="border-b border-slate-200 bg-white px-6 py-6">
-                              <div className="flex flex-wrap items-start justify-between gap-4">
-                                <div>
-                                  <div className="flex flex-wrap items-center gap-3">
-                                    <span className={`rounded-full px-3 py-1 text-[11px] font-medium uppercase tracking-[0.16em] ${methodTone(operation.method)}`}>
-                                      {operation.method}
-                                    </span>
-                                    <span className="rounded-full border border-slate-300 px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-slate-600">
-                                      {moneyFlowLabel(operation)}
-                                    </span>
-                                    <span className="rounded-full border border-slate-300 px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-slate-600">
-                                      Scope {operation.id}
-                                    </span>
-                                  </div>
-                                  <h4 className="mt-4 text-2xl font-semibold tracking-[-0.04em] text-slate-950">
-                                    {operation.label}
-                                  </h4>
-                                  <div className="mono mt-3 break-all text-sm text-slate-500">
-                                    {config.callbackBaseUrl}{operation.route}
-                                  </div>
-                                </div>
-                                <a
-                                  href={`#${toAnchor(operation.id)}`}
-                                  className="rounded-full border border-slate-300 px-3 py-2 text-xs uppercase tracking-[0.16em] text-slate-600 transition hover:border-slate-400 hover:bg-slate-50"
-                                >
-                                  Link
-                                </a>
-                              </div>
-                              <p className="mt-4 max-w-3xl text-sm leading-8 text-slate-600">{operation.description}</p>
-                            </div>
-
-                            <div className="grid gap-6 px-6 py-6 xl:grid-cols-[0.72fr_1.28fr]">
-                              <div className="space-y-6">
-                                <div className="rounded-[1.6rem] border border-slate-200 bg-white p-5">
-                                  <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Request contract</div>
-                                  {operation.fields.length ? (
-                                    <div className="mt-4 space-y-4">
-                                      {operation.fields.map((field) => (
-                                        <div key={field.name} className="rounded-[1.2rem] border border-slate-200 bg-[#fbfaf7] p-4">
-                                          <div className="flex flex-wrap items-center gap-2">
-                                            <span className="mono text-sm text-slate-900">{field.name}</span>
-                                            <span className="rounded-full border border-slate-300 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                                              {field.type}
-                                            </span>
-                                            <span className="rounded-full border border-slate-300 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                                              {field.required ? "required" : "optional"}
-                                            </span>
-                                          </div>
-                                          <div className="mt-2 text-sm font-medium text-slate-950">{field.label}</div>
-                                          <p className="mt-2 text-sm leading-7 text-slate-600">{field.description}</p>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="mt-4 text-sm leading-7 text-slate-600">
-                                      This route does not require an application JSON body.
-                                    </p>
-                                  )}
-                                </div>
-
-                                <div className="rounded-[1.6rem] border border-slate-200 bg-white p-5">
-                                  <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Behavior notes</div>
-                                  <ul className="mt-4 space-y-3 text-sm leading-7 text-slate-600">
-                                    {(operationNotes[operation.id] ?? ["No extra notes for this route beyond the request and callback contracts shown here."]).map((note) => (
-                                      <li key={note}>{note}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-
-                                <div className="rounded-[1.6rem] border border-slate-200 bg-white p-5">
-                                  <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Related callbacks</div>
-                                  {relatedCallbacks.length ? (
-                                    <div className="mt-4 space-y-3">
-                                      {relatedCallbacks.map((callback) => (
-                                        <div key={`${operation.id}-${callback.key}`} className="rounded-[1.2rem] border border-slate-200 bg-[#fbfaf7] p-4">
-                                          <div className="text-sm font-medium text-slate-950">{callback.label}</div>
-                                          <div className="mono mt-2 break-all text-xs text-slate-500">
-                                            {config.callbackUrls[callback.key]}
-                                          </div>
-                                          <p className="mt-2 text-sm leading-7 text-slate-600">{callback.purpose}</p>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="mt-4 text-sm leading-7 text-slate-600">
-                                      No dedicated callback route is associated with this endpoint in the current gateway contract.
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="space-y-6">
-                                <div className="rounded-[1.6rem] border border-slate-200 bg-[#09111a] p-5 text-slate-100">
-                                  <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">cURL example</div>
-                                  <pre className="mono mt-4 overflow-x-auto text-sm leading-7">
-{buildCurlExample(operation, config.callbackBaseUrl)}
-                                  </pre>
-                                </div>
-
-                                <div className="rounded-[1.6rem] border border-slate-200 bg-white p-5">
-                                  <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Example JSON body</div>
-                                  <pre className="mono mt-4 overflow-x-auto rounded-[1.2rem] bg-[#fbfaf7] p-4 text-sm leading-7 text-slate-800">
-{requestExample ? JSON.stringify(requestExample, null, 2) : "{ }"}
-                                  </pre>
-                                </div>
-
-                                <div className="rounded-[1.6rem] border border-slate-200 bg-white p-5">
-                                  <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Example normalized response</div>
-                                  <pre className="mono mt-4 overflow-x-auto rounded-[1.2rem] bg-[#fbfaf7] p-4 text-sm leading-7 text-slate-800">
-{JSON.stringify(responseExample, null, 2)}
-                                  </pre>
-                                </div>
-                              </div>
-                            </div>
-                          </article>
-                        );
-                      })}
+                  <article key={operation.id} className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
+                        operation.method === "POST" ? "bg-sky-100 text-sky-900" : "bg-emerald-100 text-emerald-900"
+                      }`}>
+                        {operation.method}
+                      </span>
+                      <code className="mono rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-700">
+                        {operation.route}
+                      </code>
                     </div>
-                  </section>
+                    <div className="mt-4 text-lg font-semibold text-slate-950">{operation.label}</div>
+                    <p className="mt-3 text-sm leading-7 text-slate-600">{operation.description}</p>
+                    {callbacks.length ? (
+                      <div className="mt-4 text-xs text-slate-500">
+                        Callback routes:
+                        {callbacks.map((callback) => (
+                          <div key={`${operation.id}-${callback.key}`} className="mono mt-1 break-all text-[11px] text-slate-600">
+                            {callback.url}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </article>
                 );
               })}
-            </section>
+            </div>
+          </section>
 
-            <section id="callbacks" className="grid gap-8 lg:grid-cols-2">
-              <div className="rounded-[2.4rem] border border-slate-200 bg-white p-8 shadow-[0_20px_60px_rgba(7,16,25,0.06)] sm:p-10">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-sky-700">Callbacks</div>
-                <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em]">Primary callback routes.</h2>
-                <div className="mt-8 space-y-4">
-                  {callbackDocs.map((callback) => (
-                    <div key={callback.key} className="rounded-[1.5rem] border border-slate-200 bg-[#fbfaf7] p-5">
-                      <div className="text-sm font-semibold text-slate-950">{callback.label}</div>
-                      <div className="mono mt-2 break-all text-xs text-slate-500">{config.callbackUrls[callback.key]}</div>
-                      <p className="mt-3 text-sm leading-7 text-slate-600">{callback.purpose}</p>
-                    </div>
-                  ))}
-                </div>
+          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+            <DocHeading as="h2" id="changelog" className="text-3xl font-semibold tracking-[-0.05em]">
+              Changelog
+            </DocHeading>
+            <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="rounded-full border border-slate-300 px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                  Planned
+                </span>
+                <span className="text-sm font-semibold text-slate-950">A dedicated public changelog page is not implemented yet.</span>
               </div>
-
-              <div className="rounded-[2.4rem] border border-slate-200 bg-white p-8 shadow-[0_20px_60px_rgba(7,16,25,0.06)] sm:p-10">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-sky-700">Compatibility</div>
-                <h2 className="mt-4 text-3xl font-semibold tracking-[-0.04em]">Legacy callback aliases.</h2>
-                <p className="mt-4 text-sm leading-8 text-slate-600">
-                  These routes remain available for compatibility with the earlier Python deployment
-                  and existing Safaricom registrations. They resolve to the same callback handling
-                  layer as the primary routes above.
-                </p>
-                <div className="mt-8 space-y-4">
-                  {callbackDocs.map((callback) => (
-                    <div key={`legacy-${callback.key}`} className="rounded-[1.5rem] border border-slate-200 bg-[#fbfaf7] p-5">
-                      <div className="text-sm font-semibold text-slate-950">{callback.label}</div>
-                      <div className="mono mt-2 break-all text-xs text-slate-500">{config.legacyCallbackUrls[callback.key]}</div>
-                      <p className="mt-3 text-sm leading-7 text-slate-600">
-                        Use this alias only when you need continuity with older callback registrations.
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-          </div>
+              <p className="mt-3 text-sm leading-7 text-slate-600">
+                Until a public changelog route ships, treat this page and the repository history as the authoritative reference for current gateway behavior.
+              </p>
+            </div>
+          </section>
         </div>
-      </div>
+      </DeveloperDocsShell>
     </main>
   );
 }
