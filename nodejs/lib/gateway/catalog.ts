@@ -4,6 +4,7 @@ export type OperationField = {
   name: string;
   label: string;
   type: "text" | "number" | "textarea";
+  valueFormat?: "json";
   required: boolean;
   description: string;
 };
@@ -231,6 +232,7 @@ export const operationCatalog: OperationDefinition[] = [
         name: "payload",
         label: "Payload",
         type: "textarea",
+        valueFormat: "json",
         required: true,
         description: "JSON object sent to Safaricom. Example fields include MerchantName, RefNo, Amount, and QRType.",
       },
@@ -255,6 +257,7 @@ export const operationCatalog: OperationDefinition[] = [
         name: "payload",
         label: "Payload",
         type: "textarea",
+        valueFormat: "json",
         required: true,
         description: "JSON object for the Bill Manager action you have been enabled for.",
       },
@@ -383,6 +386,7 @@ export const operationCatalog: OperationDefinition[] = [
         name: "payload",
         label: "Payload",
         type: "textarea",
+        valueFormat: "json",
         required: true,
         description: "JSON invoice payload sent to the single-invoice endpoint.",
       },
@@ -400,6 +404,7 @@ export const operationCatalog: OperationDefinition[] = [
         name: "invoices",
         label: "Invoices",
         type: "textarea",
+        valueFormat: "json",
         required: true,
         description: "JSON array of invoice objects for the bulk-invoice endpoint.",
       },
@@ -451,6 +456,7 @@ export const operationCatalog: OperationDefinition[] = [
         name: "payload",
         label: "Payload",
         type: "textarea",
+        valueFormat: "json",
         required: true,
         description: "JSON reconciliation payload approved for your Bill Manager setup.",
       },
@@ -468,6 +474,7 @@ export const operationCatalog: OperationDefinition[] = [
         name: "payload",
         label: "Payload",
         type: "textarea",
+        valueFormat: "json",
         required: true,
         description: "JSON object for the pull query or registration request.",
       },
@@ -568,6 +575,7 @@ export const operationCatalog: OperationDefinition[] = [
         name: "payload",
         label: "Payload",
         type: "textarea",
+        valueFormat: "json",
         required: true,
         description: "JSON object for the mobile validation request approved by Safaricom.",
       },
@@ -637,6 +645,7 @@ export const operationCatalog: OperationDefinition[] = [
         name: "payload",
         label: "Payload",
         type: "textarea",
+        valueFormat: "json",
         required: true,
         description: "Raw Ratiba request body. CallBackURL is injected if omitted.",
       },

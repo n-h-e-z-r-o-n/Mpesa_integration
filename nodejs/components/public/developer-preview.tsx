@@ -10,7 +10,7 @@ export function DeveloperPreview() {
             Build around an authenticated payment surface, not a scattered provider maze.
           </h2>
           <p className="mt-6 max-w-lg text-base leading-8 text-slate-300">
-            The current gateway exposes authenticated `/api/mpesa/*` operations and normalized
+            The current gateway exposes bearer-authenticated `/api/mpesa/*` operations and normalized
             responses. The SDK shape below is presented as a future developer experience goal, while
             the REST shape shown remains truthful to the existing application.
           </p>
@@ -40,8 +40,7 @@ export function DeveloperPreview() {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-zadhron-app-id": "app_live",
-      "x-zadhron-app-secret": "••••••••"
+      "Authorization": "Bearer zd_live_••••••••"
     },
     body: JSON.stringify({
       phoneNumber: "2547••••••••",

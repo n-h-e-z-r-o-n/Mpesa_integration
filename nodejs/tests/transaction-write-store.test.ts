@@ -106,6 +106,7 @@ describe("transaction write store", () => {
       {
         requestId: "req-1",
         applicationId: "admin-console",
+        apiKeyId: "api-key-1",
         merchantId: "11111111-1111-4111-8111-111111111111",
         route: "/api/mpesa/stk-push",
         method: "POST",
@@ -116,6 +117,7 @@ describe("transaction write store", () => {
     expect(insert).toHaveBeenCalledWith(
       expect.objectContaining({
         merchant_account_id: "11111111-1111-4111-8111-111111111111",
+        api_key_id: "api-key-1",
         environment: "sandbox",
         provider: "mpesa",
         provider_operation: "stkPush",

@@ -67,6 +67,7 @@ export interface GatewayConfig {
 export interface GatewayRequestContext {
   requestId: string;
   applicationId: string;
+  apiKeyId?: string;
   merchantId?: string;
   route: string;
   method: string;

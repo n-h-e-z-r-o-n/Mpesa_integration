@@ -98,12 +98,13 @@ export async function handleApplicationOperation(request: NextRequest, operation
   const startedAt = Date.now();
 
   try {
-    const application = authenticateApplication(request, operation);
+    const application = await authenticateApplication(request, operation);
     const input = await parseRequestBody(request);
     const context = {
       requestId,
       applicationId: application.id,
       merchantId: application.merchantId,
+      apiKeyId: application.apiKeyId,
       route: request.nextUrl.pathname,
       method: request.method,
       startedAt,

@@ -12,7 +12,7 @@ export function SecuritySection() {
         <div className="grid gap-5 md:grid-cols-2">
           {[
             ["Server-side credential handling", "Consumer secrets, initiator credentials, and session signing stay on the server."],
-            ["Scoped application access", "Consuming applications authenticate separately from console users."],
+            ["Scoped token access", "Merchant access tokens authenticate API calls separately from console user sessions."],
             ["Request validation", "Payloads are validated server-side before payment logic is reached."],
             ["Traceable operations", "Request IDs, provider IDs, and callback events remain linked through the lifecycle."],
           ].map(([title, body]) => (

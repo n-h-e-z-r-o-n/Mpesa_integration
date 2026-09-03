@@ -1,5 +1,5 @@
 const items = [
-  ["Authentication", "Separate application authentication from administrator sessions."],
+  ["Authentication", "Separate bearer-token API authentication from administrator sessions."],
   ["Idempotency", "Prepare payout and money-moving operations for retry-safe execution."],
   ["Structured Errors", "Return normalized gateway errors instead of leaking raw upstream responses."],
   ["Webhooks", "Accept, sanitize, and track callback deliveries as part of transaction lifecycle handling."],

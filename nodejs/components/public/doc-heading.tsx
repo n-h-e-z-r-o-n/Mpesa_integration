@@ -38,19 +38,19 @@ export function DocHeading({ as = "h2", children, id, className = "" }: Props) {
       data-doc-level={as === "h2" ? "2" : "3"}
       className={`group scroll-mt-32 text-slate-950 ${className}`}
     >
-      <span className="inline-flex items-center gap-3">
-        <span>{children}</span>
+      <span className="inline-flex flex-wrap items-center gap-2.5">
+        <span className="min-w-0">{children}</span>
         <a
           href={`#${id}`}
           aria-label={`Jump to ${typeof children === "string" ? children : "section"}`}
-          className="mono rounded-full border border-slate-300 px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-slate-500 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+          className="mono rounded-full border border-slate-300/90 bg-white/85 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-500 opacity-0 shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
         >
-          #
+          Link
         </a>
         <button
           type="button"
           onClick={handleCopy}
-          className="rounded-full border border-slate-300 px-2 py-0.5 text-[11px] uppercase tracking-[0.16em] text-slate-500 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+          className="rounded-full border border-slate-300/90 bg-white/85 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-500 opacity-0 shadow-[0_8px_18px_rgba(15,23,42,0.06)] transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
         >
           {copied ? "Copied" : "Copy link"}
         </button>

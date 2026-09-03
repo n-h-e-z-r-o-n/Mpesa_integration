@@ -372,6 +372,7 @@ async function findExistingDatabaseTransaction(
 
 function buildDatabasePayload(
   record: TransactionRecord,
+  context: GatewayRequestContext,
   merchantId: string,
   transactionType: DatabaseTransactionType,
 ) {
@@ -385,6 +386,7 @@ function buildDatabasePayload(
 
   return {
     merchant_account_id: merchantId,
+    api_key_id: context.apiKeyId ?? null,
     environment: normalizeEnvironment(getGatewayConfig().mpesaEnvironment),
     provider: "mpesa",
     provider_operation: record.operation,
@@ -441,7 +443,7 @@ export async function persistDatabaseTransactionRecord(
   if (!merchantId) {
     return null;
   }
-  const payload = buildDatabasePayload(record, merchantId, transactionType);
+  const payload = buildDatabasePayload(record, context, merchantId, transactionType);
   if (!payload) {
     return null;
   }

@@ -1,5 +1,5 @@
 import type { GatewayConfig } from "@/lib/mpesa/types";
-import type { OperationDefinition } from "@/lib/gateway/catalog";
+import { operationCatalog, type OperationDefinition } from "@/lib/gateway/catalog";
 import type { MpesaOperation } from "@/types/gateway";
 
 import { DocHeading } from "@/components/public/doc-heading";
@@ -175,8 +175,8 @@ const endpointNotes: Partial<Record<MpesaOperation, string[]>> = {
 };
 
 const defaultErrors: ErrorRow[] = [
-  { status: 401, code: "authentication_error", description: "Missing, unknown, disabled, or invalid application credentials." },
-  { status: 403, code: "authorization_error", description: "The application is authenticated but lacks the required operation scope." },
+  { status: 401, code: "authentication_error", description: "Missing, unknown, disabled, or invalid access token." },
+  { status: 403, code: "authorization_error", description: "The access token is valid but lacks the required operation scope." },
   { status: 422, code: "validation_error", description: "The request body failed schema validation or required gateway configuration is missing." },
   { status: 502, code: "mpesa_request_failed", description: "Safaricom rejected the upstream request or returned an operational failure." },
 ];
@@ -204,12 +204,9 @@ function relatedCallbacks(operationId: MpesaOperation, config: GatewayConfig) {
 }
 
 function isJsonField(operationId: MpesaOperation, fieldName: string) {
-  return (
-    fieldName === "payload" ||
-    fieldName === "invoices" ||
-    operationId === "billManagerCreateSingleInvoice" ||
-    operationId === "billManagerReconciliation"
-  );
+  const operation = operationCatalog.find((item) => item.id === operationId);
+  const field = operation?.fields.find((item) => item.name === fieldName);
+  return field?.valueFormat === "json";
 }
 
 function exampleValue(operationId: MpesaOperation, fieldName: string) {
@@ -412,8 +409,7 @@ function buildExampleResponse(operation: OperationDefinition) {
 function buildCurlExample(operation: OperationDefinition, baseUrl: string) {
   const lines = [
     `curl -X ${operation.method} "${baseUrl}${operation.route}"`,
-    '  -H "x-zadhron-app-id: app_live"',
-    '  -H "x-zadhron-app-secret: replace-with-secret"',
+    '  -H "Authorization: Bearer zd_live_replace_with_token"',
   ];
 
   if (operation.method !== "GET") {
@@ -439,8 +435,7 @@ function buildNodeExample(operation: OperationDefinition, baseUrl: string) {
     `  method: "${operation.method}",`,
     "  headers: {",
     '    "Content-Type": "application/json",',
-    '    "x-zadhron-app-id": "app_live",',
-    '    "x-zadhron-app-secret": "replace-with-secret",',
+    '    "Authorization": "Bearer zd_live_replace_with_token",',
     ...(operation.moneyMoving ? ['    "Idempotency-Key": "moneyflow-20260831-1001",'] : []),
     "  },",
     ...(request ? [`  body: JSON.stringify(${JSON.stringify(request, null, 2)}),`] : []),
@@ -456,8 +451,7 @@ function buildNodeExample(operation: OperationDefinition, baseUrl: string) {
 function buildStoredStatusCurlExample(baseUrl: string) {
   return [
     `curl "${baseUrl}/api/mpesa/transactions/status?checkoutRequestId=ws_CO_123456789"`,
-    '  -H "x-zadhron-app-id: app_live"',
-    '  -H "x-zadhron-app-secret: replace-with-secret"',
+    '  -H "Authorization: Bearer zd_live_replace_with_token"',
   ].join(" \\\n");
 }
 
@@ -468,8 +462,7 @@ function buildStoredStatusNodeExample(baseUrl: string) {
     "",
     "const response = await fetch(url, {",
     '  headers: {',
-    '    "x-zadhron-app-id": "app_live",',
-    '    "x-zadhron-app-secret": "replace-with-secret",',
+    '    "Authorization": "Bearer zd_live_replace_with_token",',
     "  },",
     "});",
     "",
@@ -620,29 +613,61 @@ function buildC2bConfirmationExample() {
   );
 }
 
+const sectionFrameClass =
+  "overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white/96 p-6 shadow-[0_24px_70px_rgba(15,23,42,0.06)] ring-1 ring-white/70 backdrop-blur sm:p-8";
+const insetCardClass =
+  "rounded-[1.55rem] border border-slate-200/85 bg-[#f9fbfd] p-5 shadow-[0_10px_26px_rgba(15,23,42,0.04)]";
+const elevatedCardClass =
+  "rounded-[1.55rem] border border-slate-200/85 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.06)]";
+const tableWrapClass =
+  "overflow-hidden rounded-[1.45rem] border border-slate-200/90 bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]";
+const eyebrowClass = "text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500";
+
+function methodBadgeClass(method: EndpointDoc["method"]) {
+  return method === "POST"
+    ? "bg-sky-100 text-sky-900 ring-1 ring-sky-200"
+    : "bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200";
+}
+
+function statusBadgeClass(label: string) {
+  if (label === "succeeded") {
+    return "bg-emerald-100 text-emerald-900 ring-1 ring-emerald-200";
+  }
+
+  if (label === "pending" || label === "accepted") {
+    return "bg-sky-100 text-sky-900 ring-1 ring-sky-200";
+  }
+
+  if (label === "cancelled" || label === "timeout") {
+    return "bg-amber-100 text-amber-900 ring-1 ring-amber-200";
+  }
+
+  return "bg-rose-100 text-rose-900 ring-1 ring-rose-200";
+}
+
 function renderParameterTable(parameters: EndpointDoc["parameters"]) {
   return (
-    <div className="overflow-hidden rounded-[1.4rem] border border-slate-200">
+    <div className={tableWrapClass}>
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
-          <thead className="bg-slate-50 text-[11px] uppercase tracking-[0.16em] text-slate-500">
+          <thead className="bg-slate-50/90 text-[11px] uppercase tracking-[0.18em] text-slate-500">
             <tr>
-              <th className="px-4 py-3">Field</th>
-              <th className="px-4 py-3">Type</th>
-              <th className="px-4 py-3">Required</th>
-              <th className="px-4 py-3">Details</th>
+              <th className="px-4 py-3.5">Field</th>
+              <th className="px-4 py-3.5">Type</th>
+              <th className="px-4 py-3.5">Required</th>
+              <th className="px-4 py-3.5">Details</th>
             </tr>
           </thead>
           <tbody className="bg-white">
             {parameters.map((parameter) => (
-              <tr key={parameter.name} className="border-t border-slate-200 align-top">
-                <td className="mono px-4 py-3 text-slate-950">{parameter.name}</td>
-                <td className="px-4 py-3 text-slate-600">{parameter.type}</td>
-                <td className="px-4 py-3 text-slate-600">{parameter.required ? "Yes" : "Optional"}</td>
-                <td className="px-4 py-3 text-slate-600">
+              <tr key={parameter.name} className="border-t border-slate-200/80 align-top transition hover:bg-slate-50/70">
+                <td className="mono px-4 py-3.5 text-slate-950">{parameter.name}</td>
+                <td className="px-4 py-3.5 text-slate-600">{parameter.type}</td>
+                <td className="px-4 py-3.5 text-slate-600">{parameter.required ? "Yes" : "Optional"}</td>
+                <td className="px-4 py-3.5 text-slate-600">
                   {parameter.description}
                   {parameter.defaultValue ? (
-                    <span className="block text-slate-500">Default: {parameter.defaultValue}</span>
+                    <span className="mt-1 block text-slate-500">Default: {parameter.defaultValue}</span>
                   ) : null}
                 </td>
               </tr>
@@ -655,27 +680,71 @@ function renderParameterTable(parameters: EndpointDoc["parameters"]) {
 }
 
 function EndpointArticle({ doc }: { doc: EndpointDoc }) {
+  const detailPills = [
+    `${doc.parameters.length} parameter${doc.parameters.length === 1 ? "" : "s"}`,
+    `${doc.errors.length} documented error${doc.errors.length === 1 ? "" : "s"}`,
+    doc.webhook ? "Asynchronous completion" : "Immediate completion",
+  ];
+
   return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
-      <DocHeading as="h2" id={doc.id} className="text-3xl font-semibold tracking-[-0.05em]">
-        {doc.title}
-      </DocHeading>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
-          doc.method === "POST" ? "bg-sky-100 text-sky-900" : "bg-emerald-100 text-emerald-900"
-        }`}>
-          {doc.method}
-        </span>
-        <code className="mono rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-700">
-          {doc.route}
-        </code>
+    <section className={sectionFrameClass}>
+      <div className="grid gap-6 border-b border-slate-200/80 pb-7 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+        <div className="min-w-0">
+          <div className={eyebrowClass}>Endpoint reference</div>
+          <DocHeading as="h2" id={doc.id} className="mt-4 text-3xl font-semibold tracking-[-0.055em] sm:text-[2.15rem]">
+            {doc.title}
+          </DocHeading>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${methodBadgeClass(doc.method)}`}>
+              {doc.method}
+            </span>
+            <code className="mono rounded-full border border-slate-300/90 bg-white px-3 py-1 text-xs text-slate-700 shadow-[0_6px_16px_rgba(15,23,42,0.05)]">
+              {doc.route}
+            </code>
+          </div>
+          <p className="mt-5 max-w-3xl text-[15px] leading-8 text-slate-600 sm:text-base">{doc.description}</p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {detailPills.map((pill) => (
+              <span
+                key={pill}
+                className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-600"
+              >
+                {pill}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="min-w-0 rounded-[1.7rem] border border-[#1b2f4a] bg-[linear-gradient(160deg,#0b1524_0%,#0f2035_100%)] p-5 text-white shadow-[0_22px_50px_rgba(10,20,34,0.28)]">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-sky-200/80">Request profile</div>
+          <div className="mt-4 grid gap-3">
+            <div className="rounded-[1.2rem] border border-white/10 bg-white/5 p-4">
+              <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Authentication</div>
+              <div className="mt-2 text-sm leading-7 text-slate-100">Bearer token with operation scope enforcement.</div>
+            </div>
+            <div className="rounded-[1.2rem] border border-white/10 bg-white/5 p-4">
+              <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Completion model</div>
+              <div className="mt-2 text-sm leading-7 text-slate-100">
+                {doc.webhook
+                  ? doc.webhook.callbackLabel ?? "Terminal state arrives through the callback rail."
+                  : "Request completes in the immediate HTTP response."}
+              </div>
+            </div>
+            <div className="rounded-[1.2rem] border border-white/10 bg-white/5 p-4">
+              <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Operational note</div>
+              <div className="mt-2 text-sm leading-7 text-slate-100">
+                {doc.notes?.[0] ??
+                  "Persist request identifiers from the immediate response so support and reconciliation stay straightforward."}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <p className="mt-5 max-w-3xl text-base leading-8 text-slate-600">{doc.description}</p>
 
       <div className="mt-8 grid gap-6 2xl:grid-cols-[0.92fr_1.08fr]">
-        <div className="space-y-6">
-          <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Authentication</div>
+        <div className="min-w-0 space-y-6">
+          <div className={insetCardClass}>
+            <div className={eyebrowClass}>Authentication</div>
             <ul className="mt-4 space-y-3 text-sm leading-7 text-slate-600">
               {doc.authentication.map((item) => (
                 <li key={item}>{item}</li>
@@ -684,13 +753,13 @@ function EndpointArticle({ doc }: { doc: EndpointDoc }) {
           </div>
 
           <div>
-            <div className="mb-3 text-[11px] uppercase tracking-[0.16em] text-slate-500">Request parameters</div>
+            <div className={`mb-3 ${eyebrowClass}`}>Request parameters</div>
             {renderParameterTable(doc.parameters)}
           </div>
 
           {doc.notes?.length ? (
-            <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Implementation notes</div>
+            <div className={insetCardClass}>
+              <div className={eyebrowClass}>Implementation notes</div>
               <ul className="mt-4 space-y-3 text-sm leading-7 text-slate-600">
                 {doc.notes.map((note) => (
                   <li key={note}>{note}</li>
@@ -699,28 +768,32 @@ function EndpointArticle({ doc }: { doc: EndpointDoc }) {
             </div>
           ) : null}
 
-          <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">
+          <div className={insetCardClass}>
+            <div className={eyebrowClass}>
               {doc.statusHeading ?? "Possible statuses"}
             </div>
             <div className="mt-4 space-y-3">
               {doc.statuses.map((status) => (
-                <div key={status.label} className="rounded-[1.2rem] border border-slate-200 bg-white p-4">
-                  <div className="mono text-sm text-slate-950">{status.label}</div>
+                <div key={status.label} className={elevatedCardClass}>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${statusBadgeClass(status.label)}`}>
+                      {status.label}
+                    </span>
+                  </div>
                   <p className="mt-2 text-sm leading-7 text-slate-600">{status.description}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Error responses</div>
+          <div className={insetCardClass}>
+            <div className={eyebrowClass}>Error responses</div>
             <div className="mt-4 space-y-3">
               {doc.errors.map((error) => (
-                <div key={`${error.status}-${error.code}`} className="rounded-[1.2rem] border border-slate-200 bg-white p-4">
+                <div key={`${error.status}-${error.code}`} className={elevatedCardClass}>
                   <div className="flex flex-wrap items-center gap-3">
                     <span className="mono text-sm text-slate-950">{error.status}</span>
-                    <span className="mono rounded-full border border-slate-300 px-2 py-0.5 text-[11px] text-slate-600">
+                    <span className="mono rounded-full border border-slate-300 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600">
                       {error.code}
                     </span>
                   </div>
@@ -731,7 +804,7 @@ function EndpointArticle({ doc }: { doc: EndpointDoc }) {
           </div>
         </div>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           <DocsCodeTabs
             title="Request example"
             description="Use cURL or Node.js against the public Zadhron route. For money-moving calls, send a stable Idempotency-Key."
@@ -789,8 +862,8 @@ function createEndpointDocs(
       description:
         "Initiate a handset prompt for a customer payment. Zadhron normalizes the request and response, then waits for the terminal outcome to arrive through the STK callback rail.",
       authentication: [
-        "Requires x-zadhron-app-id and x-zadhron-app-secret.",
-        "The application must be allowed to call the stkPush operation.",
+        "Requires a merchant access token in the Authorization header.",
+        "The token must be allowed to call the stkPush operation.",
         "Send Idempotency-Key on retryable collection requests so duplicate prompts do not fan out after transport uncertainty.",
       ],
       parameters: stkPush.fields.map((field) => ({
@@ -831,8 +904,8 @@ function createEndpointDocs(
       description:
         "Query an existing STK request by CheckoutRequestID. This is the fastest recovery path when the initial request is still pending and the handset callback has not landed yet.",
       authentication: [
-        "Requires x-zadhron-app-id and x-zadhron-app-secret.",
-        "The application must be allowed to call the stkQuery operation.",
+        "Requires a merchant access token in the Authorization header.",
+        "The token must be allowed to call the stkQuery operation.",
       ],
       parameters: stkQuery.fields.map((field) => ({
         name: field.name,
@@ -881,8 +954,8 @@ function createEndpointDocs(
       description:
         "Send funds from the configured organization shortcode to a customer wallet. The initial API response is only an acceptance signal; the terminal result is asynchronous.",
       authentication: [
-        "Requires x-zadhron-app-id and x-zadhron-app-secret.",
-        "The application must be allowed to call the b2c operation.",
+        "Requires a merchant access token in the Authorization header.",
+        "The token must be allowed to call the b2c operation.",
         "Send Idempotency-Key for retry safety on payout requests.",
       ],
       parameters: b2c.fields.map((field) => ({
@@ -927,8 +1000,8 @@ function createEndpointDocs(
       description:
         "Transfer funds between business shortcodes. Zadhron normalizes the acceptance response and tracks the final result through the B2B callback pair.",
       authentication: [
-        "Requires x-zadhron-app-id and x-zadhron-app-secret.",
-        "The application must be allowed to call the b2b operation.",
+        "Requires a merchant access token in the Authorization header.",
+        "The token must be allowed to call the b2b operation.",
         "Send Idempotency-Key for retry safety on transfer requests.",
       ],
       parameters: b2b.fields.map((field) => ({
@@ -973,8 +1046,8 @@ function createEndpointDocs(
       description:
         "Use the B2Pochi product for merchant-to-wallet disbursement when Safaricom has enabled it for your shortcode. The terminal result arrives on the B2C callback rail in the current gateway implementation.",
       authentication: [
-        "Requires x-zadhron-app-id and x-zadhron-app-secret.",
-        "The application must be allowed to call the businessToPochi operation.",
+        "Requires a merchant access token in the Authorization header.",
+        "The token must be allowed to call the businessToPochi operation.",
         "Send Idempotency-Key for retry safety on disbursement requests.",
       ],
       parameters: businessToPochi.fields.map((field) => ({
@@ -1019,8 +1092,8 @@ function createEndpointDocs(
       description:
         "Ask Safaricom for the status of an existing M-Pesa transaction. This is the provider-side query surface, distinct from Zadhron's own stored transaction lookup route.",
       authentication: [
-        "Requires x-zadhron-app-id and x-zadhron-app-secret.",
-        "The application must be allowed to call the transactionStatus operation.",
+        "Requires a merchant access token in the Authorization header.",
+        "The token must be allowed to call the transactionStatus operation.",
       ],
       parameters: transactionStatus.fields.map((field) => ({
         name: field.name,
@@ -1068,8 +1141,8 @@ function createEndpointDocs(
       description:
         "Request a reversal for an existing M-Pesa transaction. Treat the initial API response as acceptance only and wait for the asynchronous reversal result.",
       authentication: [
-        "Requires x-zadhron-app-id and x-zadhron-app-secret.",
-        "The application must be allowed to call the reversal operation.",
+        "Requires a merchant access token in the Authorization header.",
+        "The token must be allowed to call the reversal operation.",
         "Send Idempotency-Key for retry safety on reversal requests.",
       ],
       parameters: reversal.fields.map((field) => ({
@@ -1116,8 +1189,8 @@ function createEndpointDocs(
       description:
         "Request the official balance snapshot for the configured shortcode. The terminal payload arrives through the account-balance result or timeout callback.",
       authentication: [
-        "Requires x-zadhron-app-id and x-zadhron-app-secret.",
-        "The application must be allowed to call the accountBalance operation.",
+        "Requires a merchant access token in the Authorization header.",
+        "The token must be allowed to call the accountBalance operation.",
       ],
       parameters: accountBalance.fields.map((field) => ({
         name: field.name,
@@ -1292,8 +1365,8 @@ export function DeveloperDocs({ config, operations }: Props) {
     description:
       "Read the latest Zadhron-known status for a previously created transaction by requestId, checkoutRequestId, idempotencyKey, or accountReference. This route returns Zadhron's stored record, not a live Safaricom query.",
     authentication: [
-      "Requires x-zadhron-app-id and x-zadhron-app-secret.",
-      "The current implementation authenticates this route using the same application auth layer as STK Push access.",
+      "Requires a merchant access token in the Authorization header.",
+      "The current implementation authenticates this route using the same bearer-token auth layer as STK Push access.",
       "Provide one of requestId, checkoutRequestId, idempotencyKey, or accountReference as a query parameter.",
     ],
     parameters: [
@@ -1319,79 +1392,134 @@ export function DeveloperDocs({ config, operations }: Props) {
     ],
     errors: [
       { status: 400, code: "bad_request", description: "No supported lookup parameter was provided." },
-      { status: 401, code: "authentication_error", description: "The supplied application credentials were rejected." },
-      { status: 404, code: "not_found", description: "No stored transaction matched the supplied lookup value for this application." },
+      { status: 401, code: "authentication_error", description: "The supplied access token was rejected." },
+      { status: 404, code: "not_found", description: "No stored transaction matched the supplied lookup value for this token context." },
       { status: 500, code: "internal_error", description: "The transaction store could not be read." },
     ],
   };
 
+  const documentedRouteCount = endpointDocs.length + 3;
+  const asyncRouteCount = endpointDocs.filter((doc) => doc.webhook).length + 1;
+  const callbackRailCount = callbackDocs.length;
+
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(193,223,255,0.38),transparent_24%),linear-gradient(180deg,#f4f7fb_0%,#f8fbff_26%,#eef3f9_100%)] text-slate-950">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(187,215,249,0.36),transparent_24%),radial-gradient(circle_at_top_right,rgba(255,255,255,0.8),transparent_32%),linear-gradient(180deg,#f2f5f8_0%,#f7f9fc_22%,#eef2f7_100%)] text-slate-950">
       <DeveloperDocsShell sidebar={sidebar} toc={toc}>
         <div className="space-y-8">
-          <section className="overflow-hidden rounded-[2.4rem] border border-slate-200 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.09)]">
-            <div className="border-b border-slate-200 bg-[linear-gradient(135deg,#0a1322_0%,#0c1a31_48%,#102543_100%)] px-6 py-8 text-white sm:px-8 sm:py-10">
-              <div className="max-w-4xl">
-                <div className="text-[11px] uppercase tracking-[0.2em] text-sky-200">Zadhron Payments</div>
-                <h1 className="mt-4 text-4xl font-semibold tracking-[-0.06em] sm:text-5xl">
-                  Developer documentation for the live M-Pesa gateway surface.
-                </h1>
-                <p className="mt-5 max-w-3xl text-base leading-8 text-slate-200">
-                  This page documents the gateway behavior currently implemented in this project as of
-                  August 31, 2026: application authentication, normalized request and response envelopes,
-                  STK collection flows, treasury operations, provider callbacks, and transaction lookup.
-                </p>
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <a
-                    href="#quick-start"
-                    style={{ color: "#08111a" }}
-                    className="rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 transition hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
-                  >
-                    Start integrating
-                  </a>
-                  <a
-                    href="#api-reference-requests"
-                    className="rounded-full border border-white/15 px-5 py-3 text-sm text-white transition hover:bg-white/6 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
-                  >
-                    Common request contract
-                  </a>
+          <section className="overflow-hidden rounded-[2.5rem] border border-slate-200/80 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.08)] ring-1 ring-white/70">
+            <div className="grid gap-0 lg:grid-cols-[1.16fr_0.84fr]">
+              <div className="border-b border-slate-200/80 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_28%),linear-gradient(135deg,#091322_0%,#0c1c31_52%,#12304f_100%)] px-6 py-8 text-white sm:px-8 sm:py-10 lg:border-b-0 lg:border-r">
+                <div className="max-w-4xl">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-200">Zadhron Payments</div>
+                  <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-[-0.065em] sm:text-[3.35rem] sm:leading-[1.02]">
+                    Developer docs for the live M-Pesa gateway surface.
+                  </h1>
+                  <p className="mt-5 max-w-3xl text-[15px] leading-8 text-slate-200 sm:text-base">
+                    This page documents the current implementation as of September 2, 2026: bearer-token authentication,
+                    normalized request and response envelopes, STK collection flows, treasury operations, provider callbacks,
+                    and stored transaction lookup.
+                  </p>
+                  <div className="mt-7 flex flex-wrap gap-3">
+                    <a
+                      href="#quick-start"
+                      style={{ color: "#08111a" }}
+                      className="rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 shadow-[0_16px_40px_rgba(255,255,255,0.14)] transition duration-200 hover:-translate-y-px hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
+                    >
+                      Start integrating
+                    </a>
+                    <a
+                      href="#api-reference-requests"
+                      className="rounded-full border border-white/15 bg-white/[0.03] px-5 py-3 text-sm text-white transition duration-200 hover:-translate-y-px hover:bg-white/8 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
+                    >
+                      Request contract
+                    </a>
+                  </div>
+                  <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-[1.35rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+                      <div className="mono text-2xl text-white">{documentedRouteCount}</div>
+                      <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-slate-300">Documented routes</div>
+                    </div>
+                    <div className="rounded-[1.35rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+                      <div className="mono text-2xl text-white">{asyncRouteCount}</div>
+                      <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-slate-300">Async flows</div>
+                    </div>
+                    <div className="rounded-[1.35rem] border border-white/10 bg-white/5 p-4 backdrop-blur">
+                      <div className="mono text-2xl text-white">{callbackRailCount}</div>
+                      <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-slate-300">Callback rails</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-[linear-gradient(180deg,#f8fbff_0%,#f2f6fb_100%)] px-6 py-8 sm:px-8 sm:py-10">
+                <div className={eyebrowClass}>What to expect</div>
+                <div className="mt-4 space-y-3">
+                  {[
+                    "Generate a merchant token and keep it server-side.",
+                    "Call a normalized Zadhron route such as STK Push or B2C.",
+                    "Persist requestId plus provider identifiers from the first response.",
+                    "Resolve the terminal state through callbacks or a query path.",
+                  ].map((step, index) => (
+                    <div key={step} className="flex gap-4 rounded-[1.4rem] border border-slate-200/85 bg-white/90 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.05)]">
+                      <div className="mono flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0f2035] text-sm text-white">
+                        0{index + 1}
+                      </div>
+                      <p className="pt-1 text-sm leading-7 text-slate-700">{step}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-5 rounded-[1.5rem] border border-slate-200/90 bg-[#0f2035] p-5 text-white shadow-[0_16px_40px_rgba(15,23,42,0.18)]">
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-sky-200/80">Primary integration model</div>
+                  <p className="mt-3 text-sm leading-7 text-slate-200">
+                    Build around normalized fields such as <code className="mono rounded bg-white/10 px-1.5 py-0.5 text-xs">requestId</code> and
+                    <code className="mono rounded bg-white/10 px-1.5 py-0.5 text-xs">status</code>. Safaricom identifiers still pass through,
+                    but they are secondary to the gateway contract.
+                  </p>
                 </div>
               </div>
             </div>
 
-            <div className="grid gap-4 px-6 py-6 sm:px-8 lg:grid-cols-[1.2fr_0.8fr]">
-              <div className="rounded-[1.6rem] border border-slate-200 bg-[#f8fbff] p-5">
-                <DocHeading as="h2" id="introduction" className="text-2xl font-semibold tracking-[-0.04em]">
+            <div className="grid gap-4 border-t border-slate-200/80 bg-white px-6 py-6 sm:px-8 lg:grid-cols-[1.15fr_0.85fr]">
+              <div className={insetCardClass}>
+                <DocHeading as="h2" id="introduction" className="text-[1.85rem] font-semibold tracking-[-0.05em]">
                   Introduction
                 </DocHeading>
                 <p className="mt-4 text-sm leading-8 text-slate-600">
-                  Zadhron Payments exposes a single authenticated HTTP surface in front of Safaricom
-                  M-Pesa operations. Developers can initiate STK Push requests, register or simulate C2B,
-                  send payouts with B2C, B2B, and Business to Pochi, query transaction state, request reversals,
-                  and receive asynchronous Safaricom callbacks through stable Zadhron routes.
+                  Zadhron Payments exposes a single authenticated HTTP surface in front of Safaricom M-Pesa operations.
+                  Developers can initiate STK Push requests, register or simulate C2B, send payouts with B2C, B2B,
+                  and Business to Pochi, query transaction state, request reversals, and receive asynchronous Safaricom
+                  callbacks through stable Zadhron routes.
                 </p>
                 <p className="mt-4 text-sm leading-8 text-slate-600">
-                  The public API is organized around normalized fields such as <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">requestId</code>,
-                  <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">status</code>, and application-scoped auth.
-                  Safaricom-specific identifiers such as <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">CheckoutRequestID</code>,
-                  <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">ConversationID</code>, and receipt numbers are still preserved when relevant,
+                  The public API is organized around normalized fields such as <code className="mono rounded bg-white px-1.5 py-0.5 text-xs">requestId</code>,
+                  <code className="mono rounded bg-white px-1.5 py-0.5 text-xs">status</code>, and bearer-token authentication.
+                  Safaricom-specific identifiers such as <code className="mono rounded bg-white px-1.5 py-0.5 text-xs">CheckoutRequestID</code>,
+                  <code className="mono rounded bg-white px-1.5 py-0.5 text-xs">ConversationID</code>, and receipt numbers are preserved when relevant,
                   but they are not the primary integration model.
                 </p>
               </div>
 
-              <div className="rounded-[1.6rem] border border-slate-200 bg-[#0d1726] p-5 text-slate-100">
-                <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Integration sequence</div>
-                <ol className="mt-4 space-y-4 text-sm leading-7 text-slate-200">
-                  <li>1. Configure a Zadhron application and obtain an application id and secret.</li>
-                  <li>2. Send a request to a permitted route such as STK Push or B2C.</li>
-                  <li>3. Read the normalized immediate response and save requestId plus upstream identifiers.</li>
-                  <li>4. Wait for the Safaricom callback or query status with STK Query or transaction lookup.</li>
-                </ol>
+              <div className="rounded-[1.6rem] border border-slate-200/90 bg-[linear-gradient(180deg,#f9fbff_0%,#eef4fb_100%)] p-5 shadow-[0_12px_30px_rgba(15,23,42,0.05)]">
+                <div className={eyebrowClass}>Core surfaces</div>
+                <div className="mt-4 grid gap-3">
+                  <div className="rounded-[1.2rem] border border-slate-200 bg-white/90 p-4">
+                    <div className="text-sm font-semibold text-slate-950">Collect</div>
+                    <p className="mt-2 text-sm leading-7 text-slate-600">STK Push and C2B cover handset prompts, registration, and simulation.</p>
+                  </div>
+                  <div className="rounded-[1.2rem] border border-slate-200 bg-white/90 p-4">
+                    <div className="text-sm font-semibold text-slate-950">Disburse</div>
+                    <p className="mt-2 text-sm leading-7 text-slate-600">B2C, B2B, and Business to Pochi expose treasury rails with normalized responses.</p>
+                  </div>
+                  <div className="rounded-[1.2rem] border border-slate-200 bg-white/90 p-4">
+                    <div className="text-sm font-semibold text-slate-950">Recover and reconcile</div>
+                    <p className="mt-2 text-sm leading-7 text-slate-600">Use STK Query, provider-side status checks, and stored transaction lookup when the first response is not final.</p>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+          <section className={sectionFrameClass}>
             <DocHeading as="h2" id="quick-start" className="text-3xl font-semibold tracking-[-0.05em]">
               Quick Start
             </DocHeading>
@@ -1400,7 +1528,7 @@ export function DeveloperDocs({ config, operations }: Props) {
             </p>
             <div className="mt-6 rounded-[1.6rem] border border-slate-200 bg-[#f8fbff] p-5">
               <div className="mono text-sm leading-8 text-slate-900">
-                Create account or operator setup → Provision application credentials → Make API request → Receive immediate normalized response → Zadhron forwards to M-Pesa → Receive Safaricom callback or query transaction state
+                Create account or operator setup → Generate merchant access token → Make API request → Receive immediate normalized response → Zadhron forwards to M-Pesa → Receive Safaricom callback or query transaction state
               </div>
             </div>
             <div className="mt-6 grid gap-4 lg:grid-cols-3">
@@ -1429,29 +1557,29 @@ export function DeveloperDocs({ config, operations }: Props) {
           </section>
 
           <section className="grid gap-6 xl:grid-cols-2">
-            <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+            <section className={sectionFrameClass}>
               <DocHeading as="h2" id="authentication" className="text-3xl font-semibold tracking-[-0.05em]">
                 Authentication
               </DocHeading>
               <p className="mt-4 text-sm leading-8 text-slate-600">
-                Every public application route uses header-based application authentication. The current gateway does
-                not accept bearer tokens for these M-Pesa routes.
+                Every public M-Pesa route uses bearer-token authentication. Send the merchant token in the standard
+                <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs"> Authorization: Bearer &lt;access-token&gt;</code>
+                header.
               </p>
               <div className="mt-6 space-y-3 rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5 text-sm text-slate-700">
-                <div><code className="mono text-slate-950">x-zadhron-app-id</code>: configured application id</div>
-                <div><code className="mono text-slate-950">x-zadhron-app-secret</code>: configured application secret</div>
+                <div><code className="mono text-slate-950">Authorization: Bearer &lt;access-token&gt;</code>: authenticates the merchant request</div>
                 <div><code className="mono text-slate-950">Content-Type: application/json</code>: required for JSON request bodies</div>
                 <div><code className="mono text-slate-950">Idempotency-Key</code>: optional, but recommended for money-moving routes</div>
               </div>
               <ul className="mt-6 space-y-3 text-sm leading-7 text-slate-600">
-                <li>Applications must be enabled and their secret must match exactly.</li>
+                <li>Access tokens are generated from the merchant dashboard and the raw token is only shown once at creation time.</li>
                 <li>Authorization is scope-based and each scope maps to an operation id such as <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">stkPush</code> or <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">b2c</code>.</li>
                 <li>A wildcard <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">*</code> scope also passes authorization.</li>
-                <li>Optional per-application rate limits return <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">429 rate_limit_exceeded</code> when breached.</li>
+                <li>Store tokens server-side and do not embed them in browser code, mobile bundles, or public repositories.</li>
               </ul>
             </section>
 
-            <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+            <section className={sectionFrameClass}>
               <DocHeading as="h2" id="environments" className="text-3xl font-semibold tracking-[-0.05em]">
                 Environments
               </DocHeading>
@@ -1489,7 +1617,7 @@ export function DeveloperDocs({ config, operations }: Props) {
             </section>
           </section>
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+          <section className={sectionFrameClass}>
             <DocHeading as="h2" id="api-keys" className="text-3xl font-semibold tracking-[-0.05em]">
               API Keys
             </DocHeading>
@@ -1525,7 +1653,7 @@ export function DeveloperDocs({ config, operations }: Props) {
             <EndpointArticle key={doc.id} doc={doc} />
           ))}
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+          <section className={sectionFrameClass}>
             <DocHeading as="h2" id="c2b" className="text-3xl font-semibold tracking-[-0.05em]">
               C2B
             </DocHeading>
@@ -1535,7 +1663,7 @@ export function DeveloperDocs({ config, operations }: Props) {
               pending STK transaction when the handset callback is missing.
             </p>
             <div className="mt-6 grid gap-6 xl:grid-cols-2">
-              <div className="rounded-[1.6rem] border border-slate-200 bg-[#fafbfd] p-5">
+              <div className="min-w-0 rounded-[1.6rem] border border-slate-200 bg-[#fafbfd] p-5">
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="rounded-full bg-sky-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-900">
                     POST
@@ -1557,7 +1685,7 @@ export function DeveloperDocs({ config, operations }: Props) {
                 </div>
               </div>
 
-              <div className="rounded-[1.6rem] border border-slate-200 bg-[#fafbfd] p-5">
+              <div className="min-w-0 rounded-[1.6rem] border border-slate-200 bg-[#fafbfd] p-5">
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="rounded-full bg-sky-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-900">
                     POST
@@ -1597,7 +1725,7 @@ export function DeveloperDocs({ config, operations }: Props) {
             <EndpointArticle key={doc.id} doc={doc} />
           ))}
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+          <section className={sectionFrameClass}>
             <DocHeading as="h2" id="webhooks-overview" className="text-3xl font-semibold tracking-[-0.05em]">
               Webhooks Overview
             </DocHeading>
@@ -1609,12 +1737,12 @@ export function DeveloperDocs({ config, operations }: Props) {
             </p>
           </section>
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+          <section className={sectionFrameClass}>
             <DocHeading as="h2" id="webhook-configuration" className="text-3xl font-semibold tracking-[-0.05em]">
               Configuring a webhook
             </DocHeading>
             <div className="grid gap-6 xl:grid-cols-2">
-              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+              <div className="min-w-0 rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
                 <div className="text-sm font-semibold text-slate-950">Safaricom callback intake</div>
                 <p className="mt-3 text-sm leading-7 text-slate-600">
                   Configure <code className="mono rounded bg-white px-1.5 py-0.5 text-xs">MPESA_CALLBACK_BASE_URL</code> or
@@ -1623,7 +1751,7 @@ export function DeveloperDocs({ config, operations }: Props) {
                   <code className="mono rounded bg-white px-1.5 py-0.5 text-xs">/callbacks/payments/*</code> aliases automatically.
                 </p>
               </div>
-              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+              <div className="min-w-0 rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
                 <div className="text-sm font-semibold text-slate-950">Merchant outbound webhooks</div>
                 <p className="mt-3 text-sm leading-7 text-slate-600">
                   The database schema and merchant dashboard include webhook records for Zadhron-to-merchant delivery,
@@ -1633,7 +1761,7 @@ export function DeveloperDocs({ config, operations }: Props) {
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+          <section className={sectionFrameClass}>
             <DocHeading as="h2" id="webhook-event-types" className="text-3xl font-semibold tracking-[-0.05em]">
               Event types
             </DocHeading>
@@ -1648,7 +1776,7 @@ export function DeveloperDocs({ config, operations }: Props) {
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+          <section className={sectionFrameClass}>
             <DocHeading as="h2" id="webhook-signatures" className="text-3xl font-semibold tracking-[-0.05em]">
               Signature verification
             </DocHeading>
@@ -1667,7 +1795,7 @@ export function DeveloperDocs({ config, operations }: Props) {
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+          <section className={sectionFrameClass}>
             <DocHeading as="h2" id="webhook-retries" className="text-3xl font-semibold tracking-[-0.05em]">
               Retries and failures
             </DocHeading>
@@ -1693,7 +1821,7 @@ export function DeveloperDocs({ config, operations }: Props) {
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+          <section className={sectionFrameClass}>
             <DocHeading as="h2" id="api-reference-requests" className="text-3xl font-semibold tracking-[-0.05em]">
               Requests
             </DocHeading>
@@ -1712,14 +1840,9 @@ export function DeveloperDocs({ config, operations }: Props) {
                 </thead>
                 <tbody className="bg-white">
                   <tr className="border-t border-slate-200">
-                    <td className="mono px-4 py-3 text-slate-950">x-zadhron-app-id</td>
+                    <td className="mono px-4 py-3 text-slate-950">Authorization</td>
                     <td className="px-4 py-3 text-slate-600">Yes</td>
-                    <td className="px-4 py-3 text-slate-600">Identifies the configured application making the call.</td>
-                  </tr>
-                  <tr className="border-t border-slate-200">
-                    <td className="mono px-4 py-3 text-slate-950">x-zadhron-app-secret</td>
-                    <td className="px-4 py-3 text-slate-600">Yes</td>
-                    <td className="px-4 py-3 text-slate-600">Authenticates the application and authorizes its operation scopes.</td>
+                    <td className="px-4 py-3 text-slate-600">Send <code className="mono rounded bg-slate-100 px-1.5 py-0.5 text-xs">Bearer &lt;access-token&gt;</code> to authenticate the merchant and authorize scopes.</td>
                   </tr>
                   <tr className="border-t border-slate-200">
                     <td className="mono px-4 py-3 text-slate-950">Content-Type</td>
@@ -1736,12 +1859,12 @@ export function DeveloperDocs({ config, operations }: Props) {
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+          <section className={sectionFrameClass}>
             <DocHeading as="h2" id="api-reference-responses" className="text-3xl font-semibold tracking-[-0.05em]">
               Responses
             </DocHeading>
             <div className="grid gap-6 xl:grid-cols-[0.88fr_1.12fr]">
-              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+              <div className="min-w-0 rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
                 <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Normalized envelope</div>
                 <ul className="mt-4 space-y-3 text-sm leading-7 text-slate-600">
                   <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">success</code>: whether the gateway call succeeded</li>
@@ -1753,53 +1876,57 @@ export function DeveloperDocs({ config, operations }: Props) {
                   <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">meta</code>: gateway metadata such as applicationId, latencyMs, and idempotency context</li>
                 </ul>
               </div>
-              <DocsCodeTabs
-                title="Sample normalized payload"
-                description="An STK Push response is typically pending at HTTP time and becomes final later through callbacks or query."
-                tabs={[
-                  {
-                    label: "STK Push",
-                    language: "json",
-                    tone: "response",
-                    code: JSON.stringify(buildExampleResponse(getOperation(operationMap, "stkPush")), null, 2),
-                  },
-                ]}
-              />
+              <div className="min-w-0">
+                <DocsCodeTabs
+                  title="Sample normalized payload"
+                  description="An STK Push response is typically pending at HTTP time and becomes final later through callbacks or query."
+                  tabs={[
+                    {
+                      label: "STK Push",
+                      language: "json",
+                      tone: "response",
+                      code: JSON.stringify(buildExampleResponse(getOperation(operationMap, "stkPush")), null, 2),
+                    },
+                  ]}
+                />
+              </div>
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+          <section className={sectionFrameClass}>
             <DocHeading as="h2" id="api-reference-errors" className="text-3xl font-semibold tracking-[-0.05em]">
               Error format
             </DocHeading>
             <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-              <div className="rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
+              <div className="min-w-0 rounded-[1.5rem] border border-slate-200 bg-[#fafbfd] p-5">
                 <div className="text-sm font-semibold text-slate-950">Common error codes</div>
                 <ul className="mt-4 space-y-3 text-sm leading-7 text-slate-600">
-                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">authentication_error</code>: credentials or callback source IP rejected</li>
-                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">authorization_error</code>: application lacks the required scope</li>
+                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">authentication_error</code>: access token or callback source IP rejected</li>
+                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">authorization_error</code>: token lacks the required scope</li>
                   <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">validation_error</code>: request body or configuration invalid</li>
                   <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">conflict_error</code>: idempotency collision or duplicate in-flight request</li>
-                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">rate_limit_exceeded</code>: configured per-application rate limit reached</li>
+                  <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">rate_limit_exceeded</code>: configured token or application rate limit reached</li>
                   <li><code className="mono rounded bg-white px-1.5 py-0.5 text-xs">mpesa_request_failed</code>: upstream Safaricom request failed</li>
                 </ul>
               </div>
-              <DocsCodeTabs
-                title="Error example"
-                description="Gateway failures still use the same envelope shape and include the operation plus requestId."
-                tabs={[
-                  {
-                    label: "JSON",
-                    language: "json",
-                    tone: "response",
-                    code: buildErrorExample("stkPush"),
-                  },
-                ]}
-              />
+              <div className="min-w-0">
+                <DocsCodeTabs
+                  title="Error example"
+                  description="Gateway failures still use the same envelope shape and include the operation plus requestId."
+                  tabs={[
+                    {
+                      label: "JSON",
+                      language: "json",
+                      tone: "response",
+                      code: buildErrorExample("stkPush"),
+                    },
+                  ]}
+                />
+              </div>
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+          <section className={sectionFrameClass}>
             <DocHeading as="h2" id="api-reference-idempotency" className="text-3xl font-semibold tracking-[-0.05em]">
               Idempotency
             </DocHeading>
@@ -1830,7 +1957,7 @@ export function DeveloperDocs({ config, operations }: Props) {
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+          <section className={sectionFrameClass}>
             <DocHeading as="h2" id="api-reference-http-status" className="text-3xl font-semibold tracking-[-0.05em]">
               HTTP status codes
             </DocHeading>
@@ -1880,7 +2007,7 @@ export function DeveloperDocs({ config, operations }: Props) {
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+          <section className={sectionFrameClass}>
             <DocHeading as="h2" id="additional-operations" className="text-3xl font-semibold tracking-[-0.05em]">
               Additional operations
             </DocHeading>
@@ -1921,7 +2048,7 @@ export function DeveloperDocs({ config, operations }: Props) {
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.07)] sm:p-8">
+          <section className={sectionFrameClass}>
             <DocHeading as="h2" id="changelog" className="text-3xl font-semibold tracking-[-0.05em]">
               Changelog
             </DocHeading>

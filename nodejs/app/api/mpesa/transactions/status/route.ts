@@ -10,7 +10,7 @@ export const revalidate = 0;
 export async function GET(request: NextRequest) {
   let application;
   try {
-    application = authenticateApplication(request, "stkPush");
+    application = await authenticateApplication(request, "stkPush");
   } catch (error) {
     return NextResponse.json(
       {

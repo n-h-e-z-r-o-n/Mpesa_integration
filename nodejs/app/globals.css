@@ -27,12 +27,14 @@
 
 html {
   background: var(--background);
+  overflow-x: clip;
 }
 
 body {
   background: var(--background);
   color: var(--text);
   font-family: var(--font-sans), sans-serif;
+  overflow-x: clip;
 }
 
 a {
@@ -47,6 +49,16 @@ select {
   font: inherit;
 }
 
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+  -webkit-text-fill-color: #0f172a;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
 ::selection {
   background: #27456a;
   color: #f6f8fb;
@@ -56,6 +68,11 @@ select {
   background:
     radial-gradient(circle at top left, rgba(43, 64, 89, 0.4), transparent 28%),
     linear-gradient(180deg, #0b1015 0%, #0d131b 100%);
+}
+
+:focus-visible {
+  outline: 2px solid rgba(88, 184, 255, 0.75);
+  outline-offset: 2px;
 }
 
 .panel {

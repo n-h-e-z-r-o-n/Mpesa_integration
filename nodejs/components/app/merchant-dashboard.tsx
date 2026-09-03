@@ -1,12 +1,11 @@
 import Link from "next/link";
 
+import { MerchantAccessPanel } from "@/components/app/merchant-access-panel";
 import { CopyableIdentifier } from "@/components/ui/copyable-identifier";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type {
-  MerchantApiKeySnapshot,
   MerchantDashboardSnapshot,
-  MerchantWebhookSnapshot,
 } from "@/lib/repositories/merchant-dashboard-store";
 import type { AuthenticatedAppUser } from "@/lib/auth/app-session";
 import type { TransactionRecord } from "@/types/gateway";
@@ -40,30 +39,6 @@ function formatTimestamp(value?: string) {
 
 function formatPercent(value: number) {
   return `${Math.round(value)}%`;
-}
-
-function shortUrl(value: string) {
-  if (value.length <= 52) {
-    return value;
-  }
-
-  return `${value.slice(0, 33)}...${value.slice(-14)}`;
-}
-
-function keyState(key: MerchantApiKeySnapshot) {
-  if (key.revokedAt) {
-    return "cancelled";
-  }
-
-  if (key.expiresAt && Date.parse(key.expiresAt) < Date.now()) {
-    return "failed";
-  }
-
-  return "healthy";
-}
-
-function webhookState(webhook: MerchantWebhookSnapshot) {
-  return webhook.isActive ? "healthy" : "cancelled";
 }
 
 function transactionCounterparty(transaction: TransactionRecord) {
@@ -296,85 +271,7 @@ export function MerchantDashboard({ snapshot, user }: Props) {
             </div>
           </div>
 
-          <div className="space-y-6">
-            <section className="rounded-[2rem] border border-white/10 bg-[#0c1521] p-6 shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">API access</div>
-              <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">Merchant API keys</h2>
-              <div className="mt-5 space-y-4">
-                {snapshot.apiKeys.length ? (
-                  snapshot.apiKeys.map((key) => (
-                    <article key={key.id} className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="text-base font-medium text-white">{key.name}</div>
-                        <StatusBadge value={keyState(key)} />
-                      </div>
-                      <div className="mono mt-3 text-xs text-slate-300">{key.keyPrefix}</div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <span className="rounded-full border border-white/10 px-2 py-1 text-[11px] uppercase tracking-[0.16em] text-slate-300">
-                          {key.environment}
-                        </span>
-                        {key.scopes.map((scope) => (
-                          <span
-                            key={`${key.id}-${scope}`}
-                            className="rounded-full border border-white/10 px-2 py-1 text-[11px] text-slate-300"
-                          >
-                            {scope}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="mt-3 text-sm leading-7 text-slate-400">
-                        Last used {formatTimestamp(key.lastUsedAt)}. Created {formatTimestamp(key.createdAt)}.
-                      </div>
-                    </article>
-                  ))
-                ) : (
-                  <EmptyState
-                    title="No API keys"
-                    description="Merchant API keys will appear here once backend key management is enabled for this account."
-                  />
-                )}
-              </div>
-            </section>
-
-            <section className="rounded-[2rem] border border-white/10 bg-[#0c1521] p-6 shadow-[0_18px_50px_rgba(0,0,0,0.18)]">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Outgoing delivery</div>
-              <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">Merchant webhooks</h2>
-              <div className="mt-5 space-y-4">
-                {snapshot.webhooks.length ? (
-                  snapshot.webhooks.map((webhook) => (
-                    <article key={webhook.id} className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="text-base font-medium text-white">{shortUrl(webhook.url)}</div>
-                        <StatusBadge value={webhookState(webhook)} />
-                      </div>
-                      <div className="mono mt-3 break-all text-xs text-slate-300">{webhook.url}</div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <span className="rounded-full border border-white/10 px-2 py-1 text-[11px] uppercase tracking-[0.16em] text-slate-300">
-                          {webhook.environment}
-                        </span>
-                        {webhook.subscribedEvents.map((eventName) => (
-                          <span
-                            key={`${webhook.id}-${eventName}`}
-                            className="rounded-full border border-white/10 px-2 py-1 text-[11px] text-slate-300"
-                          >
-                            {eventName}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="mt-3 text-sm leading-7 text-slate-400">
-                        Updated {formatTimestamp(webhook.updatedAt)}.
-                      </div>
-                    </article>
-                  ))
-                ) : (
-                  <EmptyState
-                    title="No webhooks configured"
-                    description="When merchant webhook delivery is configured, subscribed events and endpoint status will appear here."
-                  />
-                )}
-              </div>
-            </section>
-          </div>
+          <MerchantAccessPanel initialApiKeys={snapshot.apiKeys} initialWebhooks={snapshot.webhooks} />
         </section>
       </div>
     </main>

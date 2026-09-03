@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import type { OperationDefinition } from "@/lib/gateway/catalog";
+import { buildRequestPreview } from "@/lib/gateway/request-preview";
 import { JsonViewer } from "@/components/ui/json-viewer";
 
 type Props = {
@@ -22,44 +23,8 @@ export function EndpointTester({ operations }: Props) {
     body: unknown;
   } | null>(null);
 
-  const operation = useMemo(
-    () => operations.find((item) => item.id === selectedId) ?? operations[0],
-    [operations, selectedId],
-  );
-
-  const requestPreview = useMemo(() => {
-    if (!operation) {
-      return {};
-    }
-
-    if (rawMode) {
-      try {
-        return JSON.parse(rawJson);
-      } catch {
-        return { invalidJson: true };
-      }
-    }
-
-    return Object.fromEntries(
-      operation.fields
-        .filter((field) => formValues[field.name]?.trim())
-        .map((field) => {
-          const rawValue = formValues[field.name];
-          if (field.type === "number") {
-            return [field.name, Number(rawValue)];
-          }
-          if (field.type === "textarea") {
-            try {
-              return [field.name, JSON.parse(rawValue)];
-            } catch {
-              return [field.name, { invalidJson: true, raw: rawValue }];
-            }
-          }
-
-          return [field.name, rawValue];
-        }),
-    );
-  }, [formValues, operation, rawJson, rawMode]);
+  const operation = operations.find((item) => item.id === selectedId) ?? operations[0];
+  const requestPreview = buildRequestPreview(operation, formValues, rawMode, rawJson);
 
   if (!operation) {
     return null;
