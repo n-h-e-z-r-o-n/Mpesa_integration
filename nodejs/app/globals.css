@@ -1,123 +1,26 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0b1015;
-  --surface: #111821;
-  --surface-2: #16202b;
-  --surface-3: #1a2531;
-  --border: #253243;
-  --text: #ecf1f7;
-  --text-muted: #8e9aac;
-  --success: #5ebc83;
-  --warning: #c6a358;
-  --danger: #d36c6c;
-  --info: #6ea8d9;
+  --background: #ffffff;
+  --foreground: #171717;
 }
 
 @theme inline {
   --color-background: var(--background);
-  --color-foreground: var(--text);
-  --font-sans: var(--font-ibm-sans);
-  --font-mono: var(--font-ibm-mono);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
-* {
-  box-sizing: border-box;
-}
-
-html {
-  background: var(--background);
-  overflow-x: clip;
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
 }
 
 body {
   background: var(--background);
-  color: var(--text);
-  font-family: var(--font-sans), sans-serif;
-  overflow-x: clip;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-button,
-input,
-textarea,
-select {
-  font: inherit;
-}
-
-input:-webkit-autofill,
-input:-webkit-autofill:hover,
-input:-webkit-autofill:focus,
-textarea:-webkit-autofill,
-select:-webkit-autofill {
-  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
-  -webkit-text-fill-color: #0f172a;
-  transition: background-color 5000s ease-in-out 0s;
-}
-
-::selection {
-  background: #27456a;
-  color: #f6f8fb;
-}
-
-.console-shell {
-  background:
-    radial-gradient(circle at top left, rgba(43, 64, 89, 0.4), transparent 28%),
-    linear-gradient(180deg, #0b1015 0%, #0d131b 100%);
-}
-
-:focus-visible {
-  outline: 2px solid rgba(88, 184, 255, 0.75);
-  outline-offset: 2px;
-}
-
-.panel {
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface) 92%, black 8%);
-}
-
-.panel-muted {
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-2) 94%, black 6%);
-}
-
-.mono {
-  font-family: var(--font-mono), monospace;
-}
-
-.hero-image-rotator {
-  isolation: isolate;
-}
-
-.hero-image-layer {
-  opacity: 0;
-  transition: opacity 700ms ease-out;
-}
-
-.hero-image-layer.is-active {
-  opacity: 1;
-}
-
-.blueprint-grid {
-  background-image:
-    linear-gradient(rgba(71, 85, 105, 0.14) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(71, 85, 105, 0.14) 1px, transparent 1px);
-  background-size: 18px 18px;
-}
-
-.thin-scrollbar::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-.thin-scrollbar::-webkit-scrollbar-thumb {
-  background: #2a394b;
-}
-
-.thin-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
 }

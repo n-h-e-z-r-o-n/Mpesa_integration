@@ -1,5 +1,0 @@
-⨯ SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
-    at JSON.parse (<anonymous>)
-⨯ SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
-    at JSON.parse (<anonymous>)
-{"level":"warn","message":"OAuth health probe failed","data":{"message":"M-Pesa OAuth returned invalid JSON"}}

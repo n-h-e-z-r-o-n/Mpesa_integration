@@ -1,14 +1,8 @@
-import { NextResponse } from "next/server";
-
-import { getGatewayOverview } from "@/services/mpesa/service";
-
-export const runtime = "nodejs";
+import { NextResponse } from 'next/server';
 
 export async function GET() {
-  const overview = await getGatewayOverview();
   return NextResponse.json({
-    status: overview.providerHealth === "healthy" ? "ok" : "degraded",
-    provider: "mpesa",
-    overview,
+    status: 'ok',
+    timestamp: new Date().toISOString(),
   });
 }
